@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Pixelfit.Core;
 
 namespace Pixelfit.Cli;
@@ -28,6 +29,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        UseUtf8Output();
+
         try
         {
             return Run(args);
@@ -36,6 +39,25 @@ internal static class Program
         {
             Console.Error.WriteLine($"pixelfit: {e.Message}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// The report is not ASCII: it uses an em dash, a sigma for the step deviation and a
+    /// degree sign for every hue. A console whose code page cannot represent those prints
+    /// them as "?", which loses the units that make the numbers mean anything — on a Japanese
+    /// Windows, "shield.png ? 7 distinct colours" and "step sigma" reading as "step ?".
+    /// </summary>
+    private static void UseUtf8Output()
+    {
+        try
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+        }
+        catch (IOException)
+        {
+            // No console attached, or one that will not take the change. The report is still
+            // correct, it just loses a few glyphs, and that is not worth failing a run over.
         }
     }
 
