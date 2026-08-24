@@ -93,10 +93,34 @@ runtime, and the version moves between Paint.NET releases.
 
 API reference: `paintdotnet.github.io/apidocs/`
 
-Deployment is a DLL dropped into the `Effects` folder. Paint.NET scans for
-plugins only at startup, so a restart is required after every build — factor
-this into how you iterate, and prefer testing algorithm changes through the
-CLI and unit tests rather than through the plugin.
+**Parts of this API are abstract in behaviour and virtual in signature.** Some
+members are declared `virtual` with a base body that throws
+`NotImplementedException`, so the compiler will not tell you that you had to
+override them, and nothing fails until a live host reaches the code. On
+`EffectConfigForm` this applies at least to `OnCreateInitialToken` and
+`OnUpdateDialogFromToken` — leaving either alone takes the whole application
+down the moment the dialog is constructed, not just the dialog. Before
+deriving from a Paint.NET base class, read its XML docs in the install folder
+for "must be implemented"/"must be overridden" and override those members even
+when there is nothing to do; a no-op override is the point.
+
+Note also that `OnCreateInitialToken` runs *before* the derived constructor
+body and before `Effect` is set, so it must not touch anything the dialog
+builds.
+
+Deployment is two DLLs dropped into the `Effects` folder — the plugin and
+`Pixelfit.Core`, since dependencies resolve from the folder the plugin loaded
+from. The folder lives under `Program Files`, so the copy needs an elevated
+shell. Paint.NET scans for plugins only at startup, so a restart is required
+after every build, and the host must be closed first or the DLLs are locked —
+factor this into how you iterate, and prefer testing algorithm changes through
+the CLI and unit tests rather than through the plugin.
+
+What the unit tests cannot reach is exactly this: they never load Paint.NET,
+so no test will ever catch a host-contract failure of the kind above. Type
+checks over the built assembly do not either — an effect can be perfectly
+discoverable and still throw the instant its dialog opens. Anything touching
+the plugin's host surface has to be confirmed by opening it.
 
 ### PixelizeEffect
 
