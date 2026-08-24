@@ -66,23 +66,49 @@ internal sealed class SourceImage
         return new Rgb24(Rgb[o], Rgb[o + 1], Rgb[o + 2]);
     }
 
-    /// <summary>Distinct colours of the layer, ignoring fully transparent pixels.</summary>
-    public Rgb24[] UniqueColors(int limit = 512)
+    /// <summary>
+    /// Distinct colours of the layer, ignoring fully transparent pixels, and how many of them
+    /// there really are.
+    /// </summary>
+    /// <remarks>
+    /// The limit caps what is collected. Reaching it is not the same answer as the layer having
+    /// that many colours, and the difference decides whether an "unused" verdict may be given
+    /// at all: measured against a truncated list, every entry the artwork uses further down
+    /// looks absent from it.
+    /// <para>
+    /// The total is counted in a two-megabyte bitmap over the 24-bit colour space, one bit per
+    /// representable colour. That is the same size whatever the layer holds, which a set of
+    /// every distinct colour in a photographic layer would very much not be.
+    /// </para>
+    /// </remarks>
+    public Rgb24[] UniqueColors(out int distinctTotal, int limit = 512)
     {
-        HashSet<int> seen = [];
+        byte[] seen = new byte[1 << 21];
         List<Rgb24> result = [];
+        int pixels = Width * Height;
+        distinctTotal = 0;
 
-        for (int i = 0; i < Width * Height && result.Count < limit; i++)
+        for (int i = 0; i < pixels; i++)
         {
             if (Alpha[i] == 0)
             {
                 continue;
             }
 
-            int key = (Rgb[i * 3] << 16) | (Rgb[(i * 3) + 1] << 8) | Rgb[(i * 3) + 2];
-            if (seen.Add(key))
+            int o = i * 3;
+            int key = (Rgb[o] << 16) | (Rgb[o + 1] << 8) | Rgb[o + 2];
+            byte mask = (byte)(1 << (key & 7));
+            if ((seen[key >> 3] & mask) != 0)
             {
-                result.Add(new Rgb24(Rgb[i * 3], Rgb[(i * 3) + 1], Rgb[(i * 3) + 2]));
+                continue;
+            }
+
+            seen[key >> 3] |= mask;
+            distinctTotal++;
+
+            if (result.Count < limit)
+            {
+                result.Add(new Rgb24(Rgb[o], Rgb[o + 1], Rgb[o + 2]));
             }
         }
 

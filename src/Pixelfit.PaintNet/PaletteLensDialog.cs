@@ -25,6 +25,7 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
     private Rgb24[] palette = [];
     private Rgb24[] imageColors = [];
+    private int imageColorTotal;
     private PaletteReport? report;
 
     public PaletteLensDialog()
@@ -42,7 +43,7 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
         try
         {
-            imageColors = SourceImage.Read(Environment).UniqueColors();
+            imageColors = SourceImage.Read(Environment).UniqueColors(out imageColorTotal);
         }
         catch (Exception e) when (e is InvalidOperationException or NullReferenceException or ObjectDisposedException)
         {
@@ -202,12 +203,21 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         }
     }
 
+    /// <summary>
+    /// Whether the colour list covers the whole layer, or stopped at the collection limit.
+    /// Everything the report says about the layer as a whole depends on this.
+    /// </summary>
+    private bool ImageColorsAreComplete => imageColors.Length == imageColorTotal;
+
     private void UseImageColors()
     {
         palette = imageColors;
         sourceLabel.Text = palette.Length switch
         {
             0 => "This layer has no opaque pixels.",
+            _ when !ImageColorsAreComplete =>
+                $"This layer has {imageColorTotal} distinct colours, which is not a palette. "
+                + $"Reading the first {palette.Length} in scan order. PaletteLens never modifies your image.",
             _ => $"Palette read from the image: {palette.Length} distinct colours. "
                 + "PaletteLens never modifies your image.",
         };
@@ -233,7 +243,11 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
             GplPalette loaded = GplPalette.Load(dialog.FileName);
             palette = [.. loaded.Colors];
             sourceLabel.Text = $"Palette \"{loaded.Name}\": {palette.Length} entries. "
-                + "Unused entries are reported against the current layer. PaletteLens never modifies your image.";
+                + (ImageColorsAreComplete
+                    ? "Unused entries are reported against the current layer. "
+                    : $"Unused entries are not reported: this layer has {imageColorTotal} distinct "
+                        + $"colours, more than the {imageColors.Length} read. ")
+                + "PaletteLens never modifies your image.";
             Analyze(withImage: true);
         }
         catch (Exception e) when (e is IOException or FormatException or UnauthorizedAccessException)
@@ -244,9 +258,15 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
     private void Analyze(bool withImage)
     {
+        // "Unused" is a claim about the whole layer. Made against a colour list that stopped
+        // at the limit it is only a claim about the top of one, and every palette entry the
+        // artwork uses further down would be reported as absent from artwork that is using it.
+        // Withholding the verdict is the only honest answer; a wrong one gets slots deleted.
+        bool canReportUnused = withImage && ImageColorsAreComplete;
+
         report = Ramp.Analyze(
             palette,
-            imageColors: withImage ? imageColors : ReadOnlySpan<Rgb24>.Empty);
+            imageColors: canReportUnused ? imageColors : ReadOnlySpan<Rgb24>.Empty);
 
         swatches.SetEntries(palette);
         FillRamps(report);
