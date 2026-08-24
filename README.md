@@ -51,10 +51,30 @@ It never modifies your image.
 
 ## Install
 
-Build, then drop the DLL into Paint.NET's `Effects` folder and restart —
-Paint.NET only scans for plugins at startup.
+Two assemblies go into Paint.NET's `Effects` folder: `Pixelfit.dll` and
+`Pixelfit.Core.dll`. Paint.NET resolves a plugin's dependencies from the folder it
+was loaded from, and `Pixelfit.Core.dll` is where all the algorithms live.
+
+From an **elevated** shell, since the `Effects` folder lives under `Program Files`:
+
+```bash
+dotnet build src/Pixelfit.PaintNet -t:Deploy
+```
+
+Then restart Paint.NET — it only scans for plugins at startup. Both effects appear
+under `Effects > Pixelfit`.
 
 Windows only, since Paint.NET is.
+
+### Pixelize inside Paint.NET
+
+An effect cannot resize the canvas, so Pixelize writes its result back at the
+original resolution: every cell becomes a block of flat colour. To get the actual
+sprite, follow it with `Image > Resize` at 1/grid using **nearest neighbour**.
+
+Set `Grid size` to 0 to have it estimated, or to the logical pixel size if you know
+it. `Grid offset X`/`Y` work the same way, with -1 meaning "estimate". Leave the
+palette empty to keep the reduced colours as they are.
 
 ## CLI
 
@@ -75,6 +95,26 @@ pixelfit check mypal.gpl                                     # ramp report
 | `--probe` | Print the grid estimate and exit. |
 | `--scale N` | Also write `out@Nx.png` at nearest-neighbour N×. |
 | `--dither` | Ordered 4×4 Bayer. Usually looks wrong at sprite sizes. |
+
+`check` takes a `.gpl` or a `.png`. Given an image it reads the palette from the
+image itself and reports unused entries against it.
+
+## When grid estimation will not find the grid
+
+The grid leaves a trace only at cell boundaries where the colour actually changes.
+Art that varies at nearly every logical pixel — which is what diffusion models
+produce, and what most detailed pixel art looks like — gives the estimator plenty to
+work with. Art built from large flat blocks does not: if the finest feature is two
+logical pixels across, then the shortest distance between two edges is two cells, and
+that is the period the estimator will report.
+
+Interpolation pulls the other way. The single-pixel detail that makes a grid
+recoverable is exactly the detail bicubic upscaling destroys, so an image can be easy
+to measure and hard to reconstruct, or the reverse, but rarely neither.
+
+This is why `--grid` ships from day one rather than as a later escape hatch. Run
+`--probe` first; if the answer looks wrong, pass the right one. Estimation being right
+most of the time is fine when saying otherwise costs one flag.
 
 ## Palettes
 
