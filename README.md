@@ -20,20 +20,45 @@ ramps.
 
 ## PaletteLens
 
-Run it on a sprite and it reports:
+Run it on a sprite and it reports on the structure of its palette. Here is a ramp
+that holds together, on a fixture from this repository:
 
 ```
-ramp 1 (hue ~25°, 4 entries)
-  L    0.31  0.44  0.58  0.71     monotonic, step sigma 0.008
-  hue    25    25    25    25     no hue shift
-ramp 2 (hue ~210°, 3 entries)
-  L    0.28  0.35  0.34           NOT monotonic — entries 2 and 3 out of order
+$ pixelfit check tests/Pixelfit.Tests/Fixtures/slime.png
+tests/Pixelfit.Tests/Fixtures/slime.png — 8 distinct colours
+
+ramp 1 (hue ~34°, 4 entries)
+  L      0.80  0.64  0.50  0.37     monotonic, step sigma 0.010
+  hue      62    40    26     8     hue shifts +54° from dark to light
 
 warnings
-  too close    [5] #8A5940 / [9] #8B5A3C    dE 0.011
-  greyscale    [3] and [12] differ by L 0.004 — will merge when desaturated
-  unused       [14] #2E1F3D not present in this image
+  greyscale    [0], [7] #343C52 and #5A3038 differ by L 0.007 and will merge when desaturated
+  greyscale    [1], [6] #5C6680 and #964A44 differ by L 0.009 and will merge when desaturated
 ```
+
+Lightness falls evenly and hue swings 54° across the ramp, which is the shape
+good shading has. The two greyscale collisions are a real finding about it: those
+pairs are far apart in hue and nearly identical in lightness, so they merge the
+moment the sprite is desaturated.
+
+And here is one that does not hold together:
+
+```
+$ pixelfit check tests/Pixelfit.Tests/Fixtures/shield.png
+tests/Pixelfit.Tests/Fixtures/shield.png — 7 distinct colours
+
+ramp 1 (hue ~255°, 5 entries)
+  L      0.36  0.51  0.56  0.73  0.40     NOT monotonic — reverses at 5
+  hue     269   268   248   236   252     hue shifts -33° from dark to light
+
+warnings
+  ramp order   [0], [1], [3], [4], [6] lightness reverses at position 5 of 5
+  uneven       [0], [1], [3], [4], [6] lightness steps vary by sigma 0.051
+```
+
+Lightness climbs 0.36 → 0.73 and then drops back to 0.40, so the fifth entry does
+not continue the progression, and the steps between the rest are uneven enough to
+say so.
 
 What each of these means:
 
@@ -45,9 +70,10 @@ What each of these means:
 - **Greyscale collision** — colours differing in chroma but not lightness vanish
   when desaturated. Pixel art has very little area to work with; without
   lightness contrast the form stops reading.
-- **No hue shift** — stated as an observation, not a correction. Shifting hue
+- **Hue shift** — stated as an observation, not a correction. Shifting hue
   toward cool in shadows and warm in highlights is what most good pixel art
   does, but whether yours should is a decision the tool does not make for you.
+  The report says which way a ramp moves and by how much, and stops there.
 
 It never modifies your image.
 
