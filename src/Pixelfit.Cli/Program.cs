@@ -176,9 +176,15 @@ internal static class Program
         else
         {
             byte[] rgb = ImageIo.Load(path, out int width, out int height);
-            imageColors = ImageIo.UniqueColors(rgb, width, height);
+            imageColors = ImageIo.UniqueColors(rgb, width, height, out int distinctTotal);
             palette = imageColors;
-            Console.WriteLine($"{path} — {palette.Length} distinct colours");
+
+            // The cap is a cap, not a count. Printing the collected length as the number of
+            // colours in the image is a measurement, and it would be the wrong one.
+            Console.WriteLine(
+                distinctTotal > palette.Length
+                    ? $"{path} — {distinctTotal} distinct colours; analysing the first {palette.Length} in scan order"
+                    : $"{path} — {distinctTotal} distinct colours");
         }
 
         Console.WriteLine();

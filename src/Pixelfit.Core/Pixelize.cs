@@ -183,18 +183,57 @@ public static class Pixelize
         return rgb;
     }
 
+    /// <summary>How many colours <see cref="UniqueColors"/> collects before it stops collecting.</summary>
+    public const int DefaultUniqueColorLimit = 4096;
+
     /// <summary>The distinct colours of an image, in first-seen order. The palette source for PaletteLens.</summary>
-    public static Rgb24[] UniqueColors(ReadOnlySpan<byte> rgb, int width, int height, int limit = 4096)
+    public static Rgb24[] UniqueColors(
+        ReadOnlySpan<byte> rgb,
+        int width,
+        int height,
+        int limit = DefaultUniqueColorLimit) =>
+        UniqueColors(rgb, width, height, limit, out _);
+
+    /// <summary>
+    /// The same, and how many distinct colours the image actually has.
+    /// </summary>
+    /// <remarks>
+    /// The limit caps what is collected, and reaching it is not the same answer as the image
+    /// having that many colours. A caller that prints the returned length as a count without
+    /// consulting <paramref name="distinctTotal"/> states a number that is simply wrong, which
+    /// is why the total is counted rather than inferred.
+    /// <para>
+    /// Counting happens in a two-megabyte bitmap of the whole 24-bit colour space: one bit per
+    /// representable colour, cheaper per pixel than hashing, and the same size whether the
+    /// image turns out to have four colours or four million.
+    /// </para>
+    /// </remarks>
+    public static Rgb24[] UniqueColors(
+        ReadOnlySpan<byte> rgb,
+        int width,
+        int height,
+        int limit,
+        out int distinctTotal)
     {
-        HashSet<int> seen = [];
+        byte[] seen = new byte[1 << 21];
         List<Rgb24> result = [];
         int pixels = width * height;
+        distinctTotal = 0;
 
-        for (int i = 0; i < pixels && result.Count < limit; i++)
+        for (int i = 0; i < pixels; i++)
         {
             int o = i * 3;
             int key = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
-            if (seen.Add(key))
+            byte mask = (byte)(1 << (key & 7));
+            if ((seen[key >> 3] & mask) != 0)
+            {
+                continue;
+            }
+
+            seen[key >> 3] |= mask;
+            distinctTotal++;
+
+            if (result.Count < limit)
             {
                 result.Add(new Rgb24(rgb[o], rgb[o + 1], rgb[o + 2]));
             }
