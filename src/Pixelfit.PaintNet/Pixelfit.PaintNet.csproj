@@ -1,0 +1,101 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The target framework must match the runtime the host ships with, which moves between
+       Paint.NET releases. This is net9.0 for Paint.NET 5.1x; check the official v5 effect
+       samples rather than guessing when upgrading. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Paint.NET ships self-contained, so its assemblies bind to the framework libraries
+         sitting next to the executable rather than to the reference pack this project builds
+         against. MSBuild reports that as an unresolvable conflict for WindowsBase and
+         System.Runtime.Serialization.Formatters. It is not one: the plugin is loaded into the
+         host process, which has already resolved both, and nothing is copied alongside it. -->
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+    <AssemblyName>Pixelfit</AssemblyName>
+    <RootNamespace>Pixelfit.PaintNet</RootNamespace>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <Product>Pixelfit</Product>
+    <Description>Pixelize and PaletteLens for Paint.NET</Description>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PdnRoot)' == ''">
+    <PdnRoot>C:\Program Files\paint.net</PdnRoot>
+  </PropertyGroup>
+
+  <!-- Private=False: the host already has these loaded, and copying them next to the plugin
+       would put a second copy of every Paint.NET type in the Effects folder. -->
+  <ItemGroup>
+    <Reference Include="PaintDotNet.Base">
+      <HintPath>$(PdnRoot)\PaintDotNet.Base.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.ComponentModel">
+      <HintPath>$(PdnRoot)\PaintDotNet.ComponentModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Core">
+      <HintPath>$(PdnRoot)\PaintDotNet.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Effects.Core">
+      <HintPath>$(PdnRoot)\PaintDotNet.Effects.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Framework">
+      <HintPath>$(PdnRoot)\PaintDotNet.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Fundamentals">
+      <HintPath>$(PdnRoot)\PaintDotNet.Fundamentals.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.ObjectModel">
+      <HintPath>$(PdnRoot)\PaintDotNet.ObjectModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Primitives">
+      <HintPath>$(PdnRoot)\PaintDotNet.Primitives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.PropertySystem">
+      <HintPath>$(PdnRoot)\PaintDotNet.PropertySystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Windows">
+      <HintPath>$(PdnRoot)\PaintDotNet.Windows.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Windows.Core">
+      <HintPath>$(PdnRoot)\PaintDotNet.Windows.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PaintDotNet.Windows.Framework">
+      <HintPath>$(PdnRoot)\PaintDotNet.Windows.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pixelfit.Core\Pixelfit.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Both assemblies go in: Paint.NET resolves a plugin's dependencies from the folder it
+       was loaded from, and Pixelfit.Core is where all the algorithms actually live.
+       Not part of a normal build, because the Effects folder lives under Program Files and
+       copying into it needs an elevated shell:
+
+         dotnet build src/Pixelfit.PaintNet -t:Deploy
+
+       Paint.NET only scans for plugins at startup, so restart it afterwards. -->
+  <Target Name="Deploy" DependsOnTargets="Build">
+    <ItemGroup>
+      <DeployFiles Include="$(TargetDir)Pixelfit.dll" />
+      <DeployFiles Include="$(TargetDir)Pixelfit.Core.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DeployFiles)" DestinationFolder="$(PdnRoot)\Effects" />
+    <Message Importance="high" Text="Copied @(DeployFiles->'%(Filename)%(Extension)', ' and ') to $(PdnRoot)\Effects. Restart Paint.NET." />
+  </Target>
+
+</Project>
