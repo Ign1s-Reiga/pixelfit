@@ -1,5 +1,7 @@
 # pixelfit
 
+[![build](https://github.com/Ign1s-Reiga/pixelfit/actions/workflows/build.yml/badge.svg)](https://github.com/Ign1s-Reiga/pixelfit/actions/workflows/build.yml)
+
 Pixel-art tooling for Paint.NET, plus a CLI for batch work.
 
 Two things:

@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run tells you nothing useful; drop it and keep the newest.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Windows is the platform of record. Pixelfit.Core and Pixelfit.Cli are portable and
+    # would run anywhere, but the project targets Windows because Paint.NET does, and
+    # keeping CI on the same OS means a failure here reproduces on the one machine that
+    # matters rather than being a runner artefact.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          # Builds everything: the CLI and tests target net10.0, and Core targets net9.0
+          # to match the runtime Paint.NET ships with. The net9.0 targeting pack restores
+          # from NuGet, so a single 10.x SDK is enough.
+          dotnet-version: '10.0.x'
+
+      # Pixelfit.PaintNet is deliberately absent, and `dotnet build` on the solution would
+      # fail here. It references Paint.NET's assemblies by HintPath out of the install
+      # directory, which no runner has and which are not redistributable. Building the CLI
+      # covers Core as well, since it depends on it.
+      #
+      # That gap is real: nothing below can catch a mistake in the plugin, and the plugin
+      # is where the host-contract failures live. It still has to be confirmed by opening
+      # the effect in Paint.NET.
+      - name: Build Core and CLI
+        run: dotnet build src/Pixelfit.Cli -c Release
+
+      # TreatWarningsAsErrors is on for every project, so this fails on a warning too.
+      - name: Test Core
+        run: dotnet test tests/Pixelfit.Tests -c Release
