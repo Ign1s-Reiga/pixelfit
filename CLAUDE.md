@@ -11,7 +11,13 @@ Two things it does:
    non-monotonic shading ramps, uneven lightness steps, colours too close to
    distinguish, entries that collapse in greyscale.
 
-Personal tool. Single user, single machine. Not distributed.
+Personal tool. Single user, single machine.
+
+The source is public, at `github.com/Ign1s-Reiga/pixelfit`. That is publication,
+not distribution: no releases, no binaries, no support, and no obligation to
+anyone else's setup. Nothing below this line changes because the code can be
+read. In particular, "it would help other users" is not an argument for
+reopening any of the non-goals — a second reader is not a second requirement.
 
 ---
 
@@ -63,7 +69,9 @@ and what keeps the two front-ends from diverging.
   `comfy-run prompt.json -o gen.png && pixelfit gen.png ...`
 - **No non-standard formats.** PNG (ISO/IEC 15948) and GIMP Palette (`.gpl`).
   Not `.aseprite`.
-- **No packaging work.** No installers, no NativeAOT, no signed binaries.
+- **No packaging work.** No installers, no NativeAOT, no signed binaries, and
+  no release artifacts. The repository being public does not change this; the
+  deployment step is still "build, copy two DLLs, restart Paint.NET".
 - **No Python.** Not for the tool, not for scripts, not for test helpers.
 - **PaletteLens must never modify pixels.** See below — this is load-bearing.
 
