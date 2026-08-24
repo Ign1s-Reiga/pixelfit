@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Neither step needs the token beyond reading the checkout.
+permissions:
+  contents: read
+
 # A superseded run tells you nothing useful; drop it and keep the newest.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
