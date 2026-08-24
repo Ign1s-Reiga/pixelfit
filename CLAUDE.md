@@ -260,7 +260,18 @@ Also required: a round-trip test on the colour conversions. sRGB → OKLab →
 sRGB must return the input within 1/255 across the full range, including 0 and
 255. Write this first; every downstream check is meaningless until it passes.
 
-## Conventions
+### CI
+
+`.github/workflows/build.yml` builds `Pixelfit.Core` and `Pixelfit.Cli` and runs
+the test suite on `windows-latest`, for pushes to `main` and for every pull
+request. `TreatWarningsAsErrors` is on everywhere, so a warning fails the build.
+
+**`Pixelfit.PaintNet` is not built there and cannot be.** It references Paint.NET's
+assemblies by `HintPath` out of the install directory, which no runner has and
+which are not redistributable — `dotnet build` on the solution fails in CI, which
+is why the workflow names projects rather than the solution. Do not try to "fix"
+this by adding the plugin; the only way to check it is to open the effect in
+Paint.NET. A green build says nothing about the plugin.
 
 - Nullable reference types enabled. `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`.
 - File-scoped namespaces.
