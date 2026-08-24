@@ -155,3 +155,8 @@ rather than guessing — it moves between Paint.NET releases.
 dotnet build
 dotnet test          # Core only; no Paint.NET dependency
 ```
+
+## License
+
+[MIT](LICENSE). Published, not distributed — there are no releases and no
+support, but do what you like with the code.
