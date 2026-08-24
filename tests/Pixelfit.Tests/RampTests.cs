@@ -258,4 +258,37 @@ public sealed class RampTests
         Assert.False(cool.IsMonotonicLightness);
         Assert.NotEmpty(cool.OutOfOrderPositions);
     }
+
+    /// <summary>
+    /// Pair checks are quadratic, and a set of colours read out of an image is not a palette:
+    /// 4096 entries make 8.4 million pairs, of which enough match to bury the report. The
+    /// listing has to stop somewhere, and where it stopped has to be said.
+    /// </summary>
+    [Fact]
+    public void PairWarningsStopListingAtTheCapAndReportTheRemainder()
+    {
+        // A tolerance this wide makes every pair too close, so the count is exactly known:
+        // 20 entries are 190 pairs, of which 10 are listed and 180 are not.
+        Rgb24[] palette = [.. Enumerable.Range(0, 20).Select(i => new Rgb24((byte)i, (byte)i, (byte)i))];
+        RampOptions options = new() { TooCloseDistance = 10f, MaxPairWarningsPerKind = 10 };
+
+        PaletteWarning[] tooClose =
+            [.. Ramp.Analyze(palette, options).Warnings.Where(w => w.Kind == PaletteWarningKind.TooClose)];
+
+        Assert.Equal(11, tooClose.Length);
+        Assert.Equal(10, tooClose.Count(w => w.Indices.Count == 2));
+
+        PaletteWarning remainder = Assert.Single(tooClose, w => w.Indices.Count == 0);
+        Assert.Equal(180f, remainder.Value);
+        Assert.Contains("180 more", remainder.Message);
+    }
+
+    [Fact]
+    public void APaletteUnderTheCapIsListedInFullAndSaysNothingAboutAnyRemainder()
+    {
+        PaletteReport report = Ramp.Analyze(FixtureSprites.PaletteEntries());
+
+        Assert.All(report.Warnings, w => Assert.NotEmpty(w.Indices));
+        Assert.DoesNotContain(report.Warnings, w => w.Message.Contains("listing stopped"));
+    }
 }
