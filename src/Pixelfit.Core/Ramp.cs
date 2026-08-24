@@ -77,6 +77,13 @@ public sealed record RampOptions
 
     /// <summary>Step spread above this is worth reporting.</summary>
     public float UnevenStepDeviation { get; init; } = 0.03f;
+
+    /// <summary>
+    /// How many pair warnings of one kind to list before reporting the rest as a count.
+    /// A palette has a handful; a set of colours read out of an image has hundreds of
+    /// thousands, and listing those buries every finding worth reading.
+    /// </summary>
+    public int MaxPairWarningsPerKind { get; init; } = 40;
 }
 
 /// <summary>
@@ -284,38 +291,78 @@ public static class Ramp
         }
     }
 
+    /// <summary>
+    /// Every pair, which is quadratic and unapologetically so for a palette. A set of colours
+    /// read out of an image is not a palette, though, and there the same two checks match by
+    /// the hundred thousand — enough to bury the handful of findings that matter. So each kind
+    /// lists up to <see cref="RampOptions.MaxPairWarningsPerKind"/> and reports the remainder
+    /// as a count. The count is still a fact, and it is one line rather than half a million.
+    /// </summary>
     private static IEnumerable<PaletteWarning> PairWarnings(PaletteEntry[] entries, RampOptions options)
     {
+        // Compared squared, so the hot loop does no square roots. Only a pair being listed
+        // needs its actual distance, and by then there are at most a few dozen of them.
+        float tooCloseSquared = options.TooCloseDistance * options.TooCloseDistance;
+        int cap = Math.Max(0, options.MaxPairWarningsPerKind);
+        int tooClose = 0;
+        int greyscale = 0;
+
         for (int i = 0; i < entries.Length; i++)
         {
             for (int j = i + 1; j < entries.Length; j++)
             {
-                float distance = Oklab.Distance(entries[i].Lab, entries[j].Lab);
-                if (distance < options.TooCloseDistance)
+                float squared = Oklab.DistanceSquared(entries[i].Lab, entries[j].Lab);
+                if (squared < tooCloseSquared)
                 {
-                    yield return new PaletteWarning(
-                        PaletteWarningKind.TooClose,
-                        [i, j],
-                        $"{entries[i].Color} and {entries[j].Color} differ by dE {distance:F3}",
-                        distance);
+                    if (++tooClose <= cap)
+                    {
+                        yield return TooCloseWarning(entries[i], entries[j], MathF.Sqrt(squared));
+                    }
+
                     continue;
                 }
 
                 // Only worth reporting for entries that are otherwise distinguishable —
                 // a pair already flagged as too close is one problem, not two.
                 float lightnessDelta = MathF.Abs(entries[i].Lab.L - entries[j].Lab.L);
-                if (lightnessDelta < options.GreyscaleLightnessDelta)
+                if (lightnessDelta < options.GreyscaleLightnessDelta && ++greyscale <= cap)
                 {
-                    yield return new PaletteWarning(
-                        PaletteWarningKind.GreyscaleCollision,
-                        [i, j],
-                        $"{entries[i].Color} and {entries[j].Color} differ by L {lightnessDelta:F3}"
-                        + " and will merge when desaturated",
-                        lightnessDelta);
+                    yield return GreyscaleWarning(entries[i], entries[j], lightnessDelta);
                 }
             }
         }
+
+        if (tooClose > cap)
+        {
+            yield return NotListed(PaletteWarningKind.TooClose, tooClose - cap, cap, "pairs are this close");
+        }
+
+        if (greyscale > cap)
+        {
+            yield return NotListed(PaletteWarningKind.GreyscaleCollision, greyscale - cap, cap, "pairs collide too");
+        }
     }
+
+    private static PaletteWarning TooCloseWarning(PaletteEntry a, PaletteEntry b, float distance) =>
+        new(
+            PaletteWarningKind.TooClose,
+            [a.Index, b.Index],
+            $"{a.Color} and {b.Color} differ by dE {distance:F3}",
+            distance);
+
+    private static PaletteWarning GreyscaleWarning(PaletteEntry a, PaletteEntry b, float lightnessDelta) =>
+        new(
+            PaletteWarningKind.GreyscaleCollision,
+            [a.Index, b.Index],
+            $"{a.Color} and {b.Color} differ by L {lightnessDelta:F3} and will merge when desaturated",
+            lightnessDelta);
+
+    /// <summary>
+    /// What the cap held back, said out loud. Silently dropping these would be the same
+    /// failure as reporting all of them, one report the reader cannot act on.
+    /// </summary>
+    private static PaletteWarning NotListed(PaletteWarningKind kind, int suppressed, int listed, string what) =>
+        new(kind, [], $"and {suppressed} more {what}; listing stopped at {listed}", suppressed);
 
     private static IEnumerable<PaletteWarning> UnusedWarnings(PaletteEntry[] entries, ReadOnlySpan<Rgb24> imageColors)
     {
