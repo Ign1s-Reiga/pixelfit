@@ -45,11 +45,19 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         {
             imageColors = SourceImage.Read(Environment).UniqueColors(out imageColorTotal);
         }
-        catch (Exception e) when (e is InvalidOperationException or NullReferenceException or ObjectDisposedException)
+        catch (Exception e)
         {
-            // A report we cannot produce is worth saying so about. It is never worth taking
-            // the host down over, and least of all for an effect whose whole promise is that
-            // it leaves the user's work alone.
+            // Deliberately unfiltered, and the one place in this project that should be. A
+            // named list of types is a guess at everything reading a layer can throw, and the
+            // guess was already wrong: SourceImage.Read allocates four bytes per pixel up
+            // front, so a large enough layer raises OutOfMemoryException, which walked
+            // straight past a filter naming InvalidOperationException, NullReferenceException
+            // and ObjectDisposedException.
+            //
+            // Whatever goes wrong, the answer is the same. A report we cannot produce is worth
+            // saying so about, and it is never worth taking the host down over — least of all
+            // for an effect whose whole promise is that it leaves the user's work alone, on
+            // work in progress that may not have been saved.
             sourceLabel.Text = $"Could not read the layer: {e.Message}";
             return;
         }
