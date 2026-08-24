@@ -104,7 +104,11 @@ public static class Pixelize
                 {
                     // Perturb lightness only. Nudging chroma as well shifts hue, which is a
                     // decision about the artwork rather than a quantisation step.
-                    float t = (Bayer4x4[y & 3, x & 3] / 16f) - 0.5f;
+                    //
+                    // The half-step is what centres the pattern. Sixteen values over sixteen
+                    // slots leaves the offsets running -0.5 to +0.4375, which averages below
+                    // zero and darkens every dithered region by a fraction of a step.
+                    float t = ((Bayer4x4[y & 3, x & 3] + 0.5f) / 16f) - 0.5f;
                     c = c with { L = c.L + (t * spread) };
                 }
 
