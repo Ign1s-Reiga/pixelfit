@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- net9.0 matches the runtime Paint.NET 5.1x ships with, so the same
+       assembly is loadable by the plugin. net10.0 hosts (CLI, tests) can
+       consume it unchanged. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>
