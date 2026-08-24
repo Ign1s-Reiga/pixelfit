@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Pixelfit.Cli/Pixelfit.Cli.csproj" />
+    <Project Path="src/Pixelfit.Core/Pixelfit.Core.csproj" />
+    <Project Path="src/Pixelfit.PaintNet/Pixelfit.PaintNet.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Pixelfit.Tests/Pixelfit.Tests.csproj" />
+  </Folder>
+</Solution>
