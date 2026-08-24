@@ -57,10 +57,37 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
     }
 
     /// <summary>
+    /// Creates the token the host hands back to the effect.
+    /// </summary>
+    /// <remarks>
+    /// Not optional. <c>EffectConfigForm.OnCreateInitialToken</c> is declared virtual but its
+    /// base implementation throws, so it is abstract in everything but signature, and the
+    /// generic <c>EffectConfigForm&lt;TEffect, TToken&gt;</c> supplies typed overrides for
+    /// updating a token but none for creating one. Leaving it alone takes the host down the
+    /// moment the dialog is constructed.
+    /// <para>
+    /// It also runs before this class's constructor and before <c>Effect</c> is set, so it
+    /// must not touch anything the dialog builds. Returning an empty token is all it can
+    /// safely do, and all PaletteLens needs it to do.
+    /// </para>
+    /// </remarks>
+    protected override EffectConfigToken OnCreateInitialToken() => new PaletteLensToken();
+
+    /// <summary>
     /// The effect has no settings, so there is nothing to copy out of the dialog. Overriding
     /// this to do nothing is what guarantees the token cannot pick up a stray value.
     /// </summary>
     protected override void OnUpdateTokenFromDialog(PaletteLensToken dstToken)
+    {
+        // Intentionally empty. See the class remarks.
+    }
+
+    /// <summary>
+    /// Nothing to read back out of the token either — it carries no settings. Overridden
+    /// because the base declares this one "must be overridden" as well, on the same
+    /// throw-by-default footing as <see cref="OnCreateInitialToken"/>.
+    /// </summary>
+    protected override void OnUpdateDialogFromToken(PaletteLensToken token)
     {
         // Intentionally empty. See the class remarks.
     }
