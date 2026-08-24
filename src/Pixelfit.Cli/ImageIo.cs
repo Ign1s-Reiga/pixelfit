@@ -62,6 +62,6 @@ internal static class ImageIo
         image.SaveAsPng(path);
     }
 
-    public static Rgb24[] UniqueColors(ReadOnlySpan<byte> rgb, int width, int height) =>
-        Pixelize.UniqueColors(rgb, width, height);
+    public static Rgb24[] UniqueColors(ReadOnlySpan<byte> rgb, int width, int height, out int distinctTotal) =>
+        Pixelize.UniqueColors(rgb, width, height, Pixelize.DefaultUniqueColorLimit, out distinctTotal);
 }
