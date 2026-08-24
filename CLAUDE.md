@@ -273,6 +273,8 @@ is why the workflow names projects rather than the solution. Do not try to "fix"
 this by adding the plugin; the only way to check it is to open the effect in
 Paint.NET. A green build says nothing about the plugin.
 
+## Conventions
+
 - Nullable reference types enabled. `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`.
 - File-scoped namespaces.
 - Pixel data crosses `Core` boundaries as plain `byte[]` or a simple RGB struct
