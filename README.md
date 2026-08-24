@@ -99,7 +99,12 @@ pixelfit check mypal.gpl                                     # ramp report
 | `--dither` | Ordered 4×4 Bayer. Usually looks wrong at sprite sizes. |
 
 `check` takes a `.gpl` or a `.png`. Given an image it reads the palette from the
-image itself and reports unused entries against it.
+image itself, so every entry is used by construction and nothing is reported as
+unused; unused entries are a PaletteLens question, asked of a `.gpl` against the
+open layer.
+
+Full reference for both front-ends, including the report format and what each
+warning means: [docs/usage.md](docs/usage.md).
 
 ## When grid estimation will not find the grid
 
