@@ -12,6 +12,8 @@ thing back.
 - [Paint.NET: PaletteLens](#paintnet-palettelens)
 - [CLI](#cli)
 - [Reading the palette report](#reading-the-palette-report)
+- [Extracting a palette](#extracting-a-palette-from-an-image)
+- [Checking one colour](#checking-one-colour-before-you-use-it)
 - [Palette files](#palette-files)
 - [When something looks wrong](#when-something-looks-wrong)
 
@@ -143,6 +145,7 @@ pixelfit <input.png> [--palette p.gpl] [--grid N] [--phase X,Y] [--dither]
 pixelfit <input.png> --probe
 pixelfit check <palette.gpl | image.png>
 pixelfit collide <palette.gpl | image.png> <#RRGGBB>
+pixelfit palette <image.png> -n <count> -o <out.gpl>
 ```
 
 | Flag | Meaning |
@@ -156,8 +159,9 @@ pixelfit collide <palette.gpl | image.png> <#RRGGBB>
 | `--probe` | Print the grid estimate and exit without writing anything. |
 | `-h`, `--help` | Print usage. |
 
-`check` and `collide` are separate verbs and take no flags; see
-[the report](#reading-the-palette-report) and
+`check`, `collide` and `palette` are separate verbs; see
+[the report](#reading-the-palette-report),
+[extracting a palette](#extracting-a-palette-from-an-image) and
 [checking one colour](#checking-one-colour-before-you-use-it).
 
 Unlike the plugin, `--grid 0` is an error rather than a request to estimate.
@@ -296,6 +300,60 @@ tests/Pixelfit.Tests/Fixtures/shield@8x.png — 18819 distinct colours; analysin
 
 Seeing those two lines means you pointed the report at an image rather than a
 palette. That is not a useful thing to check; run Pixelize on it first.
+
+## Extracting a palette from an image
+
+`pixelfit palette` reduces an image to the colours it is actually made of. Every
+entry is a colour the image contains, copied verbatim — cluster centres are means
+and are never emitted, so nothing here invents a colour.
+
+```
+$ pixelfit palette 02-styled-448px.png -n 16 -o extracted.gpl
+101596 distinct colours -> 16 entries -> extracted.gpl
+```
+
+| Flag | Meaning |
+|---|---|
+| `-n`, `--count` | How many colours to extract. Default 16. |
+| `-o`, `--output` | Where to write the `.gpl`. Required. |
+
+Entries come out grouped by ramp and ascending in lightness, so the palette's own
+report reads as a progression rather than as scan order.
+
+### Extract from the crispest source you have
+
+Extraction weights by pixel count, so whatever covers the most area wins — and in
+a heavily interpolated image, edge blends cover a lot of area. They are not
+colours the artwork uses, but the extractor cannot tell the difference.
+
+Measured against the sample set, reconstructing the same 64×64 sprite:
+
+| Palette | Mean dE | Pixels visibly off |
+|---|---|---|
+| Hand-made Sweetie 16 | 0.0020 | 1.6% |
+| Extracted from the crisp 7× image | 0.0104 | 1.9% |
+| Extracted from the bicubic 7× image | 0.0266 | 12.5% |
+| Extracted from the bicubic image **after pixelizing** | 0.0098 | 6.4% |
+
+On crisp input, extraction is as good as a hand-made palette. On a blurred one it
+is noticeably worse, and the fix is to pixelize first and extract from the
+result — cell reduction takes the mode, so the blends are gone before the
+extractor ever sees them:
+
+```bash
+pixelfit blurry.png --grid 7 -o reduced.png
+pixelfit palette reduced.png -n 16 -o out.gpl
+pixelfit blurry.png --grid 7 --palette out.gpl -o sprite.png
+```
+
+That halves the error on the bicubic sample.
+
+### In Paint.NET
+
+PaletteLens has an **Extract** button with a count beside it. This is what makes
+the dialog useful on a generated image: reading the colours of a layer with a
+hundred thousand of them gives a scan-order slice rather than a palette, and
+every check in the report is then measuring noise.
 
 ## Checking one colour before you use it
 

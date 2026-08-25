@@ -67,6 +67,36 @@ internal sealed class SourceImage
     }
 
     /// <summary>
+    /// The opaque pixels packed as one row, for the Core routines that take a whole image.
+    /// </summary>
+    /// <remarks>
+    /// A fully transparent pixel still carries an RGB value, and on a cut-out sprite it is
+    /// usually black or white — a colour the artwork does not contain and that would otherwise
+    /// dominate anything counting by pixel. Alpha stays out of Core, so the filtering happens
+    /// on this side and Core is handed pixels that all count.
+    /// </remarks>
+    public byte[] OpaquePixels(out int count)
+    {
+        byte[] packed = new byte[Rgb.Length];
+        count = 0;
+
+        for (int i = 0; i < Width * Height; i++)
+        {
+            if (Alpha[i] == 0)
+            {
+                continue;
+            }
+
+            packed[count * 3] = Rgb[i * 3];
+            packed[(count * 3) + 1] = Rgb[(i * 3) + 1];
+            packed[(count * 3) + 2] = Rgb[(i * 3) + 2];
+            count++;
+        }
+
+        return packed;
+    }
+
+    /// <summary>
     /// Distinct colours of the layer, ignoring fully transparent pixels, and how many of them
     /// there really are.
     /// </summary>

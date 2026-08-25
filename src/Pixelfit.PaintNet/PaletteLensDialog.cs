@@ -25,7 +25,9 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
     private readonly Label detailLabel = new();
 
     private readonly Label primaryLabel = new();
+    private readonly NumericUpDown extractCount = new();
 
+    private SourceImage? source;
     private Rgb24[] palette = [];
     private Rgb24[] imageColors = [];
     private int imageColorTotal;
@@ -49,7 +51,8 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
         try
         {
-            imageColors = SourceImage.Read(Environment).UniqueColors(out imageColorTotal);
+            source = SourceImage.Read(Environment);
+            imageColors = source.UniqueColors(out imageColorTotal);
         }
         catch (Exception e)
         {
@@ -210,6 +213,15 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         FlowLayoutPanel buttons = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
         buttons.Controls.Add(MakeButton("Use image colours", UseImageColors));
         buttons.Controls.Add(MakeButton("Load .gpl…", LoadGpl));
+
+        extractCount.Minimum = 2;
+        extractCount.Maximum = 64;
+        extractCount.Value = 16;
+        extractCount.Width = 48;
+        extractCount.Margin = new Padding(12, 4, 2, 3);
+        buttons.Controls.Add(extractCount);
+        buttons.Controls.Add(MakeButton("Extract", ExtractFromImage));
+
         buttons.Controls.Add(MakeCloseButton());
         pane.Controls.Add(buttons, 0, 4);
 
@@ -277,6 +289,43 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
             _ => $"Palette read from the image: {palette.Length} distinct colours. "
                 + "PaletteLens never modifies your image.",
         };
+
+        Analyze(withImage: true);
+    }
+
+    /// <summary>
+    /// Reduces the layer to the colours it is actually made of, and reports on those.
+    /// </summary>
+    /// <remarks>
+    /// The one thing that makes this dialog useful on a generated image. Reading the colours
+    /// of a layer with a hundred thousand of them gives a scan-order slice, not a palette, and
+    /// every check in the report is then measuring noise. This gives it something to measure.
+    /// <para>
+    /// A measurement of what the layer contains, not a proposal: every entry is a colour the
+    /// layer already has, copied verbatim. What to draw with remains the author's decision.
+    /// </para>
+    /// </remarks>
+    private void ExtractFromImage()
+    {
+        if (source is null)
+        {
+            return;
+        }
+
+        int count = (int)extractCount.Value;
+        byte[] opaque = source.OpaquePixels(out int pixels);
+        if (pixels == 0)
+        {
+            sourceLabel.Text = "This layer has no opaque pixels.";
+            return;
+        }
+
+        // One row of opaque pixels: Core takes an image and this is the whole layer's worth of
+        // colour with the transparent pixels dropped.
+        palette = Extract.Palette(opaque, pixels, 1, count);
+        sourceLabel.Text =
+            $"Extracted {palette.Length} colours from {imageColorTotal} distinct. "
+            + "Every entry is a colour this layer contains. PaletteLens never modifies your image.";
 
         Analyze(withImage: true);
     }
