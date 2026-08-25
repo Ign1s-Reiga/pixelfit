@@ -18,6 +18,7 @@ internal static class Program
                    [--scale N] -o <out.png>
           pixelfit <input.png> --probe
           pixelfit check <palette.gpl | image.png>
+          pixelfit collide <palette.gpl | image.png> <#RRGGBB>
 
           --palette PATH   GIMP palette (.gpl). Without one, cell colours are left as reduced.
           --grid N         Override the estimated logical pixel size.
@@ -74,6 +75,13 @@ internal static class Program
             return args.Length == 2
                 ? Check(args[1])
                 : throw new ArgumentException("check needs exactly one palette or image path.");
+        }
+
+        if (args[0] == "collide")
+        {
+            return args.Length == 3
+                ? Collide(args[1], args[2])
+                : throw new ArgumentException("collide needs a palette or image path and a colour.");
         }
 
         Options options = Options.Parse(args);
@@ -182,6 +190,50 @@ internal static class Program
 
         ImageIo.Save(magnified, width, height, path);
         Console.WriteLine($"{width}x{height} -> {path}");
+    }
+
+    /// <summary>
+    /// Measures one colour against a palette. Everything it prints is a fact about colours
+    /// that already exist; it does not propose one.
+    /// </summary>
+    private static int Collide(string path, string color)
+    {
+        Rgb24 candidate = ParseHex(color);
+        Rgb24[] palette = LoadPalette(path, out string label);
+
+        Console.WriteLine($"{candidate} against {label}");
+        Console.WriteLine();
+        Console.Write(CollisionReportWriter.Render(Core.Collide.Check(candidate, palette), palette));
+        return 0;
+    }
+
+    /// <summary>A palette from a .gpl, or the colours an image is made of.</summary>
+    private static Rgb24[] LoadPalette(string path, out string label)
+    {
+        if (Path.GetExtension(path).Equals(".gpl", StringComparison.OrdinalIgnoreCase))
+        {
+            GplPalette loaded = GplPalette.Load(path);
+            label = $"{loaded.Name} ({loaded.Colors.Count} entries)";
+            return [.. loaded.Colors];
+        }
+
+        byte[] rgb = ImageIo.Load(path, out int width, out int height);
+        Rgb24[] colors = ImageIo.UniqueColors(rgb, width, height, out int distinctTotal);
+        label = distinctTotal > colors.Length
+            ? $"{path} ({distinctTotal} distinct colours; comparing against the first {colors.Length})"
+            : $"{path} ({colors.Length} distinct colours)";
+        return colors;
+    }
+
+    private static Rgb24 ParseHex(string text)
+    {
+        string hex = text.TrimStart('#');
+        if (hex.Length != 6 || !int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+        {
+            throw new ArgumentException($"Colour must be six hex digits, got \"{text}\".");
+        }
+
+        return new Rgb24((byte)(value >> 16), (byte)((value >> 8) & 0xFF), (byte)(value & 0xFF));
     }
 
     private static int Check(string path)

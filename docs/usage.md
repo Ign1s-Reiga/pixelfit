@@ -142,6 +142,7 @@ pixelfit <input.png> [--palette p.gpl] [--grid N] [--phase X,Y] [--dither]
          [--scale N] -o <out.png>
 pixelfit <input.png> --probe
 pixelfit check <palette.gpl | image.png>
+pixelfit collide <palette.gpl | image.png> <#RRGGBB>
 ```
 
 | Flag | Meaning |
@@ -154,6 +155,10 @@ pixelfit check <palette.gpl | image.png>
 | `--scale N` | Also write `out@Nx.png`, magnified N× by nearest neighbour. Ignored for N ≤ 1. |
 | `--probe` | Print the grid estimate and exit without writing anything. |
 | `-h`, `--help` | Print usage. |
+
+`check` and `collide` are separate verbs and take no flags; see
+[the report](#reading-the-palette-report) and
+[checking one colour](#checking-one-colour-before-you-use-it).
 
 Unlike the plugin, `--grid 0` is an error rather than a request to estimate.
 Omit the flag instead.
@@ -291,6 +296,49 @@ tests/Pixelfit.Tests/Fixtures/shield@8x.png — 18819 distinct colours; analysin
 
 Seeing those two lines means you pointed the report at an image rather than a
 palette. That is not a useful thing to check; run Pixelize on it first.
+
+## Checking one colour before you use it
+
+`pixelfit collide` measures a single candidate against a palette: what it is
+indistinguishable from, what it merges with in greyscale, and where it would sit
+in any ramp sharing its hue.
+
+```
+$ pixelfit collide sweetie16.gpl "#566C86"
+#566C86 against Sweetie 16 (16 entries)
+
+  nearest      [14] #566C86 at dE 0.000
+  too close    [14] #566C86 at dE 0.000
+  greyscale    [2] #B13E53 differs by L 0.007 and will merge when desaturated
+  greyscale    [9] #3B5DC9 differs by L 0.009 and will merge when desaturated
+  ramp 1       would sit 5th of 8 by lightness; does not extend the progression
+```
+
+A colour that clears everything says so, and still reports what the closest
+thing you have is:
+
+```
+$ pixelfit collide sweetie16.gpl "#7A3B1F"
+#7A3B1F against Sweetie 16 (16 entries)
+
+  nearest      [2] #B13E53 at dE 0.131
+  no collisions, and no ramp shares its hue
+```
+
+`nearest` is reported whether or not anything collided — "the closest thing you
+have is this far away" is the useful answer when the answer is *no conflict*.
+
+Thresholds are the same ones the palette report uses, so a pair called too close
+here is a pair called too close there.
+
+**`extends the progression`** means the ramp climbs or falls throughout and
+putting this colour after its last entry would carry on in the same direction.
+It is a statement about the ramp's structure. It is not advice: a colour that
+lands mid-ramp is not wrong, it is simply not an extension of that ramp, and
+what to do about that is your call.
+
+The same measurement is in PaletteLens — select a swatch and the detail panel
+reports what that entry collides with, excluding itself.
 
 ### `unused` never appears in the CLI
 
