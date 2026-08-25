@@ -241,6 +241,22 @@ progression. Then report:
 Unused-entry reporting (which palette slots the current image actually uses) is
 in scope and useful. Suggesting replacement colours is not.
 
+### Extraction yes, adjustment no
+
+`Extract` reduces an image to the colours it is made of. That is a measurement —
+the same category as unused-entry reporting — and every colour it returns is one
+the image contains, copied verbatim. Cluster centres are means and are never
+emitted: that would invent a colour present nowhere in the source and would put
+an OKLab-to-sRGB conversion in a production path, which this project does not
+have.
+
+**This is the boundary, and it is easy to step over by accident.** Now that the
+tool emits palettes, "space that ramp evenly", "shift those shadows cooler" and
+"here is a better midtone" are one small step away, and all three are taste. The
+line is that pixelfit may report which colours an image contains and what is
+structurally true of them. It may not invent a colour, alter one, or rank one.
+Anything that computes a colour the source does not contain is out.
+
 ## Testing
 
 Tests target `Pixelfit.Core` and never load Paint.NET.

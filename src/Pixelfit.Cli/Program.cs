@@ -19,6 +19,7 @@ internal static class Program
           pixelfit <input.png> --probe
           pixelfit check <palette.gpl | image.png>
           pixelfit collide <palette.gpl | image.png> <#RRGGBB>
+          pixelfit palette <image.png> -n <count> -o <out.gpl>
 
           --palette PATH   GIMP palette (.gpl). Without one, cell colours are left as reduced.
           --grid N         Override the estimated logical pixel size.
@@ -82,6 +83,11 @@ internal static class Program
             return args.Length == 3
                 ? Collide(args[1], args[2])
                 : throw new ArgumentException("collide needs a palette or image path and a colour.");
+        }
+
+        if (args[0] == "palette")
+        {
+            return ExtractPalette(args);
         }
 
         Options options = Options.Parse(args);
@@ -191,6 +197,77 @@ internal static class Program
         ImageIo.Save(magnified, width, height, path);
         Console.WriteLine($"{width}x{height} -> {path}");
     }
+
+    /// <summary>
+    /// Reduces an image to the colours it is actually made of, and writes them as a .gpl.
+    /// </summary>
+    /// <remarks>
+    /// A separate step from converting on purpose. Baking an extracted palette straight into
+    /// an image would leave no moment to look at it, and looking at it — and editing it — is
+    /// the point of having it in a file.
+    /// </remarks>
+    private static int ExtractPalette(string[] args)
+    {
+        string input = args.Length > 1 && !args[1].StartsWith('-')
+            ? args[1]
+            : throw new ArgumentException("palette needs an image path.");
+
+        int count = 16;
+        string? output = null;
+
+        for (int i = 2; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "-n":
+                case "--count":
+                    count = ParseCount(NextArg(args, ref i, args[i]));
+                    break;
+
+                case "-o":
+                case "--output":
+                    output = NextArg(args, ref i, args[i]);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Unknown option {args[i]}.");
+            }
+        }
+
+        if (output is null)
+        {
+            throw new ArgumentException("No output given; use -o out.gpl.");
+        }
+
+        // Opaque pixels only. A transparent pixel still carries an RGB value, and on a cut-out
+        // sprite the invisible background is most of the canvas — extraction weights by pixel
+        // count, so it would hand back the background as the palette's dominant colour.
+        byte[] opaque = ImageIo.LoadOpaque(input, out int pixels);
+        if (pixels == 0)
+        {
+            throw new ArgumentException($"{input} has no opaque pixels.");
+        }
+
+        Rgb24[] colors = Extract.Palette(opaque, pixels, 1, count);
+
+        GplPalette palette = new(
+            Path.GetFileNameWithoutExtension(input),
+            colors,
+            [.. colors.Select(c => c.ToString())]) { Columns = 8 };
+        palette.Save(output);
+
+        Pixelize.UniqueColors(opaque, pixels, 1, 1, out int distinctTotal);
+        Console.WriteLine($"{distinctTotal} distinct colours -> {colors.Length} entries -> {output}");
+        return 0;
+    }
+
+    private static string NextArg(string[] args, ref int i, string flag) =>
+        i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{flag} needs a value.");
+
+    private static int ParseCount(string text) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value > 0
+            ? value
+            : throw new ArgumentException($"-n needs a whole number above zero, got \"{text}\".");
 
     /// <summary>
     /// Measures one colour against a palette. Everything it prints is a fact about colours

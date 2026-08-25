@@ -151,9 +151,13 @@ most of the time is fine when saying otherwise costs one flag.
 
 ## Palettes
 
-Not authored here. Make them in Aseprite, or pull an established one from
-[Lospec](https://lospec.com/palette-list), and export as `.gpl` — plain text,
-three space-separated 0–255 integers per line:
+Not *designed* here. `pixelfit palette image.png -n 16 -o out.gpl` extracts the
+colours an image is already made of, which is a measurement; choosing a palette
+to draw with is a decision, and for that use Aseprite or pull an established one
+from [Lospec](https://lospec.com/palette-list).
+
+Either way the format is `.gpl` — plain text, three space-separated 0–255
+integers per line:
 
 ```
 GIMP Palette

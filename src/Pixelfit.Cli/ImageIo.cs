@@ -2,6 +2,7 @@ using Pixelfit.Core;
 using SixLabors.ImageSharp;
 
 using Rgb24Pixel = SixLabors.ImageSharp.PixelFormats.Rgb24;
+using Rgba32Pixel = SixLabors.ImageSharp.PixelFormats.Rgba32;
 
 namespace Pixelfit.Cli;
 
@@ -64,4 +65,43 @@ internal static class ImageIo
 
     public static Rgb24[] UniqueColors(ReadOnlySpan<byte> rgb, int width, int height, out int distinctTotal) =>
         Pixelize.UniqueColors(rgb, width, height, Pixelize.DefaultUniqueColorLimit, out distinctTotal);
+
+    /// <summary>
+    /// The opaque pixels of a PNG, packed as one row.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Load"/> decodes straight to RGB and drops alpha, which is right for the
+    /// pixelize path — every pixel there is a pixel of artwork. It is wrong for anything that
+    /// counts pixels: a fully transparent pixel still carries an RGB value, and on a cut-out
+    /// sprite the invisible background is usually most of the canvas and would dominate.
+    /// </remarks>
+    public static byte[] LoadOpaque(string path, out int count)
+    {
+        using Image<Rgba32Pixel> image = Image.Load<Rgba32Pixel>(path);
+        byte[] packed = new byte[image.Width * image.Height * 3];
+        int written = 0;
+
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                Span<Rgba32Pixel> row = accessor.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    if (row[x].A == 0)
+                    {
+                        continue;
+                    }
+
+                    packed[written * 3] = row[x].R;
+                    packed[(written * 3) + 1] = row[x].G;
+                    packed[(written * 3) + 2] = row[x].B;
+                    written++;
+                }
+            }
+        });
+
+        count = written;
+        return packed;
+    }
 }
