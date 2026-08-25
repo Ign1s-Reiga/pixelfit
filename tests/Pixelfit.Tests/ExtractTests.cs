@@ -191,6 +191,29 @@ public sealed class ExtractTests
         Assert.Equal(chosen, Assert.Single(Extract.Palette(Row([.. pixels]), pixels.Count, 1, 1)));
     }
 
+    /// <summary>
+    /// Two colours equidistant from their bin's centre are equally good representatives, so
+    /// something has to break the tie — and if that something is scan order, the same colours
+    /// arranged differently give different palettes.
+    /// </summary>
+    [Fact]
+    public void ABinWithATiedRepresentativeStillIgnoresScanOrder()
+    {
+        // (1,1,1) and (5,5,5) share a bin and sit either side of its centre, so nothing but a
+        // tiebreak separates them. Three further bins keep the count above the request, which
+        // is what routes this through binning rather than the exact-colour path.
+        Rgb24[] tied =
+        [
+            new(1, 1, 1), new(5, 5, 5),
+            new(80, 80, 80), new(150, 150, 150), new(220, 220, 220),
+        ];
+
+        Rgb24[] forward = Extract.Palette(Row(tied), tied.Length, 1, 3);
+        Rgb24[] backward = Extract.Palette(Row([.. tied.Reverse()]), tied.Length, 1, 3);
+
+        Assert.Equal(forward, backward);
+    }
+
     private static byte[] Row(Rgb24[] colors)
     {
         byte[] rgb = new byte[colors.Length * 3];

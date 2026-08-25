@@ -115,9 +115,12 @@ public static class Extract
             long db = (rgb[o + 2] * n) - sumB[key];
             long d = (dr * dr) + (dg * dg) + (db * db);
 
-            if (best[key] < 0 || d < bestDistance[key])
+            // Ties broken by value, not by which pixel the scan reached first, so two images
+            // holding the same colours in a different order cannot produce different palettes.
+            int packed = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
+            if (best[key] < 0 || d < bestDistance[key] || (d == bestDistance[key] && packed < best[key]))
             {
-                best[key] = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
+                best[key] = packed;
                 bestDistance[key] = d;
             }
         }
