@@ -77,10 +77,22 @@ internal sealed class SourceImage
     /// </remarks>
     public byte[] OpaquePixels(out int count)
     {
-        byte[] packed = new byte[Rgb.Length];
+        // Counted first so the buffer is exactly the size it needs to be. Allocating one the
+        // size of the whole canvas would ask for three bytes per pixel a second time, on a
+        // layer that may be mostly transparent and may already be large.
+        int opaque = 0;
+        for (int i = 0; i < Width * Height; i++)
+        {
+            if (Alpha[i] != 0)
+            {
+                opaque++;
+            }
+        }
+
+        byte[] packed = new byte[opaque * 3];
         count = 0;
 
-        for (int i = 0; i < Width * Height; i++)
+        for (int i = 0; i < Width * Height && count < opaque; i++)
         {
             if (Alpha[i] == 0)
             {

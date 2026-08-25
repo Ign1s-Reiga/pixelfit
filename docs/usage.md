@@ -331,14 +331,14 @@ Measured against the sample set, reconstructing the same 64×64 sprite:
 | Palette | Mean dE | Pixels visibly off |
 |---|---|---|
 | Hand-made Sweetie 16 | 0.0020 | 1.6% |
-| Extracted from the crisp 7× image | 0.0104 | 1.9% |
-| Extracted from the bicubic 7× image | 0.0266 | 12.5% |
-| Extracted from the bicubic image **after pixelizing** | 0.0098 | 6.4% |
+| Extracted from the crisp 7× image | 0.0060 | 1.5% |
+| Extracted from the bicubic 7× image | 0.0212 | 12.5% |
+| Extracted from the bicubic image **after pixelizing** | 0.0084 | 5.2% |
 
-On crisp input, extraction is as good as a hand-made palette. On a blurred one it
-is noticeably worse, and the fix is to pixelize first and extract from the
-result — cell reduction takes the mode, so the blends are gone before the
-extractor ever sees them:
+On crisp input, extraction matches a hand-made palette. On a blurred one it is
+noticeably worse, and the fix is to pixelize first and extract from the result —
+cell reduction takes the mode, so the blends are gone before the extractor ever
+sees them:
 
 ```bash
 pixelfit blurry.png --grid 7 -o reduced.png
@@ -346,7 +346,7 @@ pixelfit palette reduced.png -n 16 -o out.gpl
 pixelfit blurry.png --grid 7 --palette out.gpl -o sprite.png
 ```
 
-That halves the error on the bicubic sample.
+That takes the bicubic sample from 12.5% visibly off to 5.2%.
 
 ### In Paint.NET
 

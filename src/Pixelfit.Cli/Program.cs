@@ -239,8 +239,16 @@ internal static class Program
             throw new ArgumentException("No output given; use -o out.gpl.");
         }
 
-        byte[] rgb = ImageIo.Load(input, out int width, out int height);
-        Rgb24[] colors = Extract.Palette(rgb, width, height, count);
+        // Opaque pixels only. A transparent pixel still carries an RGB value, and on a cut-out
+        // sprite the invisible background is most of the canvas — extraction weights by pixel
+        // count, so it would hand back the background as the palette's dominant colour.
+        byte[] opaque = ImageIo.LoadOpaque(input, out int pixels);
+        if (pixels == 0)
+        {
+            throw new ArgumentException($"{input} has no opaque pixels.");
+        }
+
+        Rgb24[] colors = Extract.Palette(opaque, pixels, 1, count);
 
         GplPalette palette = new(
             Path.GetFileNameWithoutExtension(input),
@@ -248,7 +256,7 @@ internal static class Program
             [.. colors.Select(c => c.ToString())]) { Columns = 8 };
         palette.Save(output);
 
-        Pixelize.UniqueColors(rgb, width, height, 1, out int distinctTotal);
+        Pixelize.UniqueColors(opaque, pixels, 1, 1, out int distinctTotal);
         Console.WriteLine($"{distinctTotal} distinct colours -> {colors.Length} entries -> {output}");
         return 0;
     }

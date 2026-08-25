@@ -36,11 +36,19 @@ public static class Extract
             throw new ArgumentException("Pixel buffer is smaller than the stated dimensions.", nameof(rgb));
         }
 
-        Bin[] bins = Histogram(rgb, width * height);
+        int pixels = width * height;
+
+        // Occupied bins are not distinct colours: several shades can share one 5-bit bin, so a
+        // bin count at or below the request says nothing about whether the image has enough
+        // colours to fill it. Only the exact count can answer that, and when bins are that few
+        // it is cheap to take — at most `count` bins of 512 colours each.
+        Bin[] bins = Histogram(rgb, pixels);
         if (bins.Length <= count)
         {
-            // Fewer distinct colours than asked for: the image is already its own palette.
-            return Order([.. bins.Select(b => b.Color)]);
+            Bin[] exact = ExactColors(rgb, pixels);
+            return exact.Length <= count
+                ? Order([.. exact.Select(b => b.Color)])
+                : Order(Snap(exact, Iterate(exact, InitialCentres(exact, count))));
         }
 
         OklabColor[] centres = Iterate(bins, InitialCentres(bins, count));
@@ -56,38 +64,105 @@ public static class Extract
     private static Bin[] Histogram(ReadOnlySpan<byte> rgb, int pixels)
     {
         long[] counts = new long[1 << 15];
-        int[] representative = new int[1 << 15];
-        Array.Fill(representative, -1);
+        long[] sumR = new long[1 << 15];
+        long[] sumG = new long[1 << 15];
+        long[] sumB = new long[1 << 15];
 
         for (int i = 0; i < pixels; i++)
         {
             int o = i * 3;
-            int key = ((rgb[o] >> QuantizeShift) << 10)
-                | ((rgb[o + 1] >> QuantizeShift) << 5)
-                | (rgb[o + 2] >> QuantizeShift);
-
+            int key = Key(rgb[o], rgb[o + 1], rgb[o + 2]);
             counts[key]++;
-            if (representative[key] < 0)
+            sumR[key] += rgb[o];
+            sumG[key] += rgb[o + 1];
+            sumB[key] += rgb[o + 2];
+        }
+
+        return Representatives(rgb, pixels, counts, sumR, sumG, sumB);
+    }
+
+    /// <summary>
+    /// Picks each bin's colour as the one nearest that bin's weighted centre.
+    /// </summary>
+    /// <remarks>
+    /// Not the first colour seen, which was the earlier choice and was wrong twice over: it
+    /// ignored the weights, so a single stray pixel could name a bin its whole population
+    /// disagreed with, and it depended on scan order, so the same colours arranged differently
+    /// produced a different palette. The centre is a mean and is never emitted — it only says
+    /// which of the real colours in the bin stands for it.
+    /// </remarks>
+    private static Bin[] Representatives(
+        ReadOnlySpan<byte> rgb,
+        int pixels,
+        long[] counts,
+        long[] sumR,
+        long[] sumG,
+        long[] sumB)
+    {
+        int[] best = new int[1 << 15];
+        long[] bestDistance = new long[1 << 15];
+        Array.Fill(best, -1);
+
+        for (int i = 0; i < pixels; i++)
+        {
+            int o = i * 3;
+            int key = Key(rgb[o], rgb[o + 1], rgb[o + 2]);
+            long n = counts[key];
+
+            // Squared distance to the centre, kept in integers by scaling both sides by n.
+            long dr = (rgb[o] * n) - sumR[key];
+            long dg = (rgb[o + 1] * n) - sumG[key];
+            long db = (rgb[o + 2] * n) - sumB[key];
+            long d = (dr * dr) + (dg * dg) + (db * db);
+
+            if (best[key] < 0 || d < bestDistance[key])
             {
-                representative[key] = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
+                best[key] = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
+                bestDistance[key] = d;
             }
         }
 
         List<Bin> bins = [];
         for (int key = 0; key < counts.Length; key++)
         {
-            if (counts[key] == 0)
+            if (counts[key] > 0)
             {
-                continue;
+                Rgb24 color = new((byte)(best[key] >> 16), (byte)((best[key] >> 8) & 0xFF), (byte)(best[key] & 0xFF));
+                bins.Add(new Bin(color, Oklab.FromSrgb(color), counts[key]));
             }
-
-            int packed = representative[key];
-            Rgb24 color = new((byte)(packed >> 16), (byte)((packed >> 8) & 0xFF), (byte)(packed & 0xFF));
-            bins.Add(new Bin(color, Oklab.FromSrgb(color), counts[key]));
         }
 
         return [.. bins];
     }
+
+    /// <summary>
+    /// Every distinct colour with its exact pixel count, for the case where the bins collapse
+    /// to fewer entries than were asked for and only exact colours can fill the request.
+    /// </summary>
+    private static Bin[] ExactColors(ReadOnlySpan<byte> rgb, int pixels)
+    {
+        Dictionary<int, long> counts = [];
+        for (int i = 0; i < pixels; i++)
+        {
+            int o = i * 3;
+            int packed = (rgb[o] << 16) | (rgb[o + 1] << 8) | rgb[o + 2];
+            counts[packed] = counts.TryGetValue(packed, out long n) ? n + 1 : 1;
+        }
+
+        return
+        [
+            .. counts
+                .OrderBy(e => e.Key)
+                .Select(e =>
+                {
+                    Rgb24 color = new((byte)(e.Key >> 16), (byte)((e.Key >> 8) & 0xFF), (byte)(e.Key & 0xFF));
+                    return new Bin(color, Oklab.FromSrgb(color), e.Value);
+                }),
+        ];
+    }
+
+    private static int Key(byte r, byte g, byte b) =>
+        ((r >> QuantizeShift) << 10) | ((g >> QuantizeShift) << 5) | (b >> QuantizeShift);
 
     /// <summary>
     /// k-means++ seeding, weighted by pixel count: spread the initial centres out instead of

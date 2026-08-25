@@ -156,6 +156,54 @@ public sealed class ExtractTests
         return ((float)(total / pixels), (float)off / pixels);
     }
 
+    /// <summary>
+    /// A bin holds a range of colours, so occupied bins are not distinct colours. Three shades
+    /// inside one 5-bit bin are still three colours, and asking for two has to give two.
+    /// </summary>
+    [Fact]
+    public void ColoursSharingOneBinAreStillDistinctColours()
+    {
+        Rgb24[] sameBin = [new(0, 0, 0), new(3, 3, 3), new(7, 7, 7)];
+        byte[] image = Row(sameBin);
+
+        Rgb24[] palette = Extract.Palette(image, sameBin.Length, 1, 2);
+
+        Assert.Equal(2, palette.Length);
+        Assert.All(palette, c => Assert.Contains(c, sameBin));
+    }
+
+    /// <summary>
+    /// A bin's representative has to answer to its population, not to which pixel the scan
+    /// reached first. Otherwise the same colours in a different order give a different palette.
+    /// </summary>
+    [Fact]
+    public void ABinIsNamedByItsPopulationAndNotByScanOrder()
+    {
+        // One black pixel, then a hundred near-white ones — all inside the same 5-bit bin.
+        List<Rgb24> pixels = [new(0, 0, 0)];
+        pixels.AddRange(Enumerable.Repeat(new Rgb24(7, 7, 7), 100));
+
+        Rgb24 chosen = Assert.Single(Extract.Palette(Row([.. pixels]), pixels.Count, 1, 1));
+        Assert.Equal(new Rgb24(7, 7, 7), chosen);
+
+        // And reversing the image must not change the answer.
+        pixels.Reverse();
+        Assert.Equal(chosen, Assert.Single(Extract.Palette(Row([.. pixels]), pixels.Count, 1, 1)));
+    }
+
+    private static byte[] Row(Rgb24[] colors)
+    {
+        byte[] rgb = new byte[colors.Length * 3];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            rgb[i * 3] = colors[i].R;
+            rgb[(i * 3) + 1] = colors[i].G;
+            rgb[(i * 3) + 2] = colors[i].B;
+        }
+
+        return rgb;
+    }
+
     [Fact]
     public void AskingForNoColoursIsAnError()
     {

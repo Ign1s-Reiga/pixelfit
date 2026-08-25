@@ -312,20 +312,30 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
             return;
         }
 
-        int count = (int)extractCount.Value;
-        byte[] opaque = source.OpaquePixels(out int pixels);
-        if (pixels == 0)
+        try
         {
-            sourceLabel.Text = "This layer has no opaque pixels.";
+            byte[] opaque = source.OpaquePixels(out int pixels);
+            if (pixels == 0)
+            {
+                sourceLabel.Text = "This layer has no opaque pixels.";
+                return;
+            }
+
+            // One row of opaque pixels: Core takes an image, and this is the whole layer's
+            // worth of colour with the transparent pixels dropped.
+            palette = Extract.Palette(opaque, pixels, 1, (int)extractCount.Value);
+            sourceLabel.Text =
+                $"Extracted {palette.Length} colours from {imageColorTotal} distinct. "
+                + "Every entry is a colour this layer contains. PaletteLens never modifies your image.";
+        }
+        catch (Exception e)
+        {
+            // Unfiltered for the reason OnLoaded is: this runs from a click handler, so
+            // anything escaping goes straight into the host, and extraction packs another
+            // buffer of the layer's opaque pixels before it starts.
+            sourceLabel.Text = $"Could not extract a palette: {e.Message}";
             return;
         }
-
-        // One row of opaque pixels: Core takes an image and this is the whole layer's worth of
-        // colour with the transparent pixels dropped.
-        palette = Extract.Palette(opaque, pixels, 1, count);
-        sourceLabel.Text =
-            $"Extracted {palette.Length} colours from {imageColorTotal} distinct. "
-            + "Every entry is a colour this layer contains. PaletteLens never modifies your image.";
 
         Analyze(withImage: true);
     }
