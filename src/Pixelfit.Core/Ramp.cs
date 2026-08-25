@@ -99,13 +99,7 @@ public static class Ramp
     {
         options ??= new RampOptions();
 
-        PaletteEntry[] entries = new PaletteEntry[palette.Length];
-        for (int i = 0; i < palette.Length; i++)
-        {
-            OklabColor lab = Oklab.FromSrgb(palette[i]);
-            entries[i] = new PaletteEntry(i, palette[i], lab, Oklab.ToOklch(lab));
-        }
-
+        PaletteEntry[] entries = Describe(palette);
         List<RampReport> ramps = DetectRamps(entries, options);
         List<PaletteWarning> warnings = [];
 
@@ -115,6 +109,30 @@ public static class Ramp
 
         return new PaletteReport(entries, ramps, warnings);
     }
+
+    /// <summary>Converts a palette to entries, with the conversions every check needs done once.</summary>
+    public static PaletteEntry[] Describe(ReadOnlySpan<Rgb24> palette)
+    {
+        PaletteEntry[] entries = new PaletteEntry[palette.Length];
+        for (int i = 0; i < palette.Length; i++)
+        {
+            OklabColor lab = Oklab.FromSrgb(palette[i]);
+            entries[i] = new PaletteEntry(i, palette[i], lab, Oklab.ToOklch(lab));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// The ramps in a palette, without running the pair checks over it.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Analyze"/> because the pair checks are quadratic and a caller
+    /// that only wants the ramp structure should not pay for them. <see cref="Collide"/> is
+    /// that caller: it asks about one candidate colour and has no use for a full report.
+    /// </remarks>
+    public static IReadOnlyList<RampReport> Ramps(ReadOnlySpan<Rgb24> palette, RampOptions? options = null) =>
+        DetectRamps(Describe(palette), options ?? new RampOptions());
 
     /// <summary>
     /// Groups entries by hue, then reports the lightness progression of each group. Neutral

@@ -156,7 +156,9 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
         detailLabel.AutoSize = false;
         detailLabel.Dock = DockStyle.Fill;
-        detailLabel.Height = 40;
+
+        // Three lines now: identity, OKLCh, and what the entry collides with.
+        detailLabel.Height = 58;
         pane.Controls.Add(detailLabel, 0, 2);
 
         FlowLayoutPanel buttons = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
@@ -372,6 +374,35 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         OklchColor lch = Oklab.OklchFromSrgb(c);
         detailLabel.Text =
             $"[{index}] {c}   rgb({c.R}, {c.G}, {c.B})\n"
-            + $"L {lch.L:F3}   C {lch.C:F3}   h {lch.H:F0}°";
+            + $"L {lch.L:F3}   C {lch.C:F3}   h {lch.H:F0}°\n"
+            + Collisions(c, index);
+    }
+
+    /// <summary>
+    /// What the selected entry runs into, measured against the rest of the palette. Excluding
+    /// the entry itself is the whole trick: without it every answer is "itself, at zero".
+    /// </summary>
+    private string Collisions(Rgb24 candidate, int index)
+    {
+        CollisionReport report = Collide.Check(candidate, palette, ignoreIndex: index);
+        if (report.NearestIndex < 0)
+        {
+            return "nothing else in this palette";
+        }
+
+        string nearest = $"nearest [{report.NearestIndex}] at dE {report.NearestDistance:F3}";
+        if (report.Collisions.Count == 0)
+        {
+            return $"{nearest} — no collisions";
+        }
+
+        string with = string.Join(", ", report.Collisions.Select(c => $"[{c.Index}]"));
+        string kinds = report.Collisions.Any(c => c.Kind == PaletteWarningKind.TooClose)
+            ? report.Collisions.Any(c => c.Kind == PaletteWarningKind.GreyscaleCollision)
+                ? "too close / greyscale"
+                : "too close"
+            : "greyscale";
+
+        return $"{nearest} — {kinds} with {with}";
     }
 }
