@@ -10,7 +10,10 @@ public sealed record Collision(int Index, Rgb24 Color, PaletteWarningKind Kind, 
 /// <summary>
 /// Where a candidate would sit in a ramp it shares a hue with.
 /// </summary>
-/// <param name="RampIndex">Index into the ramp list this placement refers to.</param>
+/// <param name="RampIndex">
+/// Which of the ramps of the palette <em>as passed in</em> this refers to, including any entry
+/// the caller asked to ignore. That is the list a caller can number, and the one a UI shows.
+/// </param>
 /// <param name="PositionByLightness">
 /// How many of the ramp's entries are darker than the candidate, so 0 means it would be the
 /// darkest and Count means the lightest.
@@ -135,6 +138,12 @@ public static class Collide
         // the caller.
         Rgb24[] considered = Without(palette, ignoreIndex);
         IReadOnlyList<RampReport> ramps = Ramp.Ramps(considered, options);
+
+        // The measurements come from the reduced set; the index does not. A caller numbering
+        // ramps has the palette it passed in, so that is what RampIndex has to be read
+        // against — and excluding an entry can drop an earlier ramp below the minimum, which
+        // would otherwise shift every number after it and name the wrong ramp.
+        IReadOnlyList<RampReport> numbered = ignoreIndex < 0 ? ramps : Ramp.Ramps(palette, options);
         List<RampPlacement> placements = [];
 
         for (int i = 0; i < ramps.Count; i++)
@@ -145,10 +154,39 @@ public static class Collide
                 continue;
             }
 
-            placements.Add(Placement(i, lab.L, [.. ramp.Lightness], ramp.IsMonotonicLightness));
+            placements.Add(Placement(
+                NumberOf(ramp, numbered, ignoreIndex, i),
+                lab.L,
+                [.. ramp.Lightness],
+                ramp.IsMonotonicLightness));
         }
 
         return placements;
+    }
+
+    /// <summary>
+    /// Which of the full palette's ramps this one is, found by taking a member back to the
+    /// index it had before the exclusion shifted everything after it down.
+    /// </summary>
+    private static int NumberOf(RampReport ramp, IReadOnlyList<RampReport> numbered, int ignoreIndex, int fallback)
+    {
+        if (ignoreIndex < 0 || ramp.Indices.Count == 0)
+        {
+            return fallback;
+        }
+
+        int member = ramp.Indices[0];
+        int original = member < ignoreIndex ? member : member + 1;
+
+        for (int i = 0; i < numbered.Count; i++)
+        {
+            if (numbered[i].Indices.Contains(original))
+            {
+                return i;
+            }
+        }
+
+        return fallback;
     }
 
     /// <summary>The palette without one entry, or unchanged when there is nothing to leave out.</summary>

@@ -190,6 +190,33 @@ public sealed class CollisionTests
         Assert.Equal(WarmRamp.Length - 1, placement.MemberCount);
     }
 
+    /// <summary>
+    /// RampIndex is read against the ramps of the palette as passed in, because that is the
+    /// list a caller has and, in the dialog, the list on screen. Excluding an entry can drop an
+    /// earlier ramp below the minimum, and if the index were read against what survived, a
+    /// placement would name a different ramp than the one it belongs to.
+    /// </summary>
+    [Fact]
+    public void RampIndexStaysReadableAgainstTheFullPalette()
+    {
+        // Ramp 0 is warm and has exactly three members; ramp 1 is cool and has four.
+        Rgb24[] palette =
+        [
+            At(0.30f, 0.07f, 45f), At(0.50f, 0.07f, 45f), At(0.70f, 0.07f, 45f),
+            At(0.25f, 0.09f, 250f), At(0.45f, 0.09f, 250f), At(0.65f, 0.09f, 250f), At(0.85f, 0.09f, 250f),
+        ];
+
+        Assert.Equal(2, Ramp.Ramps(palette).Count);
+
+        // Ignoring a warm entry leaves the warm ramp with two members, so it stops being a
+        // ramp — but the cool ramp is still ramp 1 to anyone looking at the palette.
+        CollisionReport report = Collide.Check(At(0.55f, 0.09f, 250f), palette, ignoreIndex: 0);
+
+        RampPlacement placement = Assert.Single(report.Placements);
+        Assert.Equal(1, placement.RampIndex);
+        Assert.True(Ramp.Ramps(palette)[placement.RampIndex].HueDegrees is > 180f and < 320f);
+    }
+
     [Fact]
     public void ThresholdsComeFromRampOptionsSoOneSetOfNumbersGovernsBoth()
     {
