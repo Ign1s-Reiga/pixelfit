@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
 using PaintDotNet.Effects;
+using PaintDotNet.Imaging;
 using Pixelfit.Core;
 
 namespace Pixelfit.PaintNet;
@@ -23,9 +24,12 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
     private readonly Label sourceLabel = new();
     private readonly Label detailLabel = new();
 
+    private readonly Label primaryLabel = new();
+
     private Rgb24[] palette = [];
     private Rgb24[] imageColors = [];
     private int imageColorTotal;
+    private Rgb24? primaryColor;
     private PaletteReport? report;
 
     public PaletteLensDialog()
@@ -40,6 +44,8 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
     protected override void OnLoaded()
     {
         base.OnLoaded();
+
+        primaryColor = ReadPrimaryColor();
 
         try
         {
@@ -64,6 +70,37 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
         UseImageColors();
     }
+
+    /// <summary>
+    /// The colour currently loaded in Paint.NET's primary slot, or null if it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes the report about the colour you are *about* to use rather than about
+    /// the ones you have already used. An effect dialog is modal, so the primary colour cannot
+    /// change while this is open and reading it once is enough.
+    /// <para>
+    /// <c>ManagedColor</c> is colour-managed and carries its own context; the conversion asks
+    /// for its value in that context and comes back as floats. Failure here costs the one extra
+    /// line and nothing else, so it is caught rather than allowed to reach the host — the same
+    /// reasoning as reading the layer.
+    /// </para>
+    /// </remarks>
+    private Rgb24? ReadPrimaryColor()
+    {
+        try
+        {
+            ManagedColor primary = Environment.PrimaryColor;
+            ColorRgba128Float value = primary.Get(primary.ColorContext);
+            return new Rgb24(Channel(value.R), Channel(value.G), Channel(value.B));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static byte Channel(float value) =>
+        (byte)Math.Clamp((int)MathF.Round(value * 255f), 0, 255);
 
     /// <summary>
     /// Creates the token the host hands back to the effect.
@@ -140,9 +177,10 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
 
     private Control BuildPalettePane()
     {
-        TableLayoutPanel pane = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        TableLayoutPanel pane = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5 };
         pane.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         pane.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        pane.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         pane.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         pane.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -161,11 +199,19 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         detailLabel.Height = 58;
         pane.Controls.Add(detailLabel, 0, 2);
 
+        // Two lines for the colour you are holding, kept visually apart from the selected
+        // swatch's detail because it is a different question about a different colour.
+        primaryLabel.AutoSize = false;
+        primaryLabel.Dock = DockStyle.Fill;
+        primaryLabel.Height = 44;
+        primaryLabel.Margin = new Padding(3, 6, 3, 0);
+        pane.Controls.Add(primaryLabel, 0, 3);
+
         FlowLayoutPanel buttons = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
         buttons.Controls.Add(MakeButton("Use image colours", UseImageColors));
         buttons.Controls.Add(MakeButton("Load .gpl…", LoadGpl));
         buttons.Controls.Add(MakeCloseButton());
-        pane.Controls.Add(buttons, 0, 3);
+        pane.Controls.Add(buttons, 0, 4);
 
         return pane;
     }
@@ -282,6 +328,7 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         FillRamps(report);
         FillWarnings(report);
         ShowSelectedEntry();
+        ShowPrimaryColor();
     }
 
     private void FillRamps(PaletteReport current)
@@ -376,6 +423,30 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
             $"[{index}] {c}   rgb({c.R}, {c.G}, {c.B})\n"
             + $"L {lch.L:F3}   C {lch.C:F3}   h {lch.H:F0}°\n"
             + Collisions(c, index);
+    }
+
+    /// <summary>
+    /// The colour you are holding, measured against the palette you are working in.
+    /// </summary>
+    /// <remarks>
+    /// The one report here that is about a colour not yet in the artwork. Everything it says
+    /// is still a measurement — what the colour is indistinguishable from, what it merges with
+    /// in greyscale, where it would fall in a ramp. It does not say whether to use it.
+    /// </remarks>
+    private void ShowPrimaryColor()
+    {
+        if (primaryColor is not Rgb24 candidate)
+        {
+            primaryLabel.Text = string.Empty;
+            return;
+        }
+
+        OklchColor lch = Oklab.OklchFromSrgb(candidate);
+        string header = $"Primary colour {candidate}   L {lch.L:F3}   C {lch.C:F3}   h {lch.H:F0}°";
+
+        primaryLabel.Text = palette.Length == 0
+            ? $"{header}\nno palette to measure it against"
+            : $"{header}\n{Collisions(candidate, -1)}";
     }
 
     /// <summary>
