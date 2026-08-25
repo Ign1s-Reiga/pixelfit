@@ -128,27 +128,47 @@ public static class Collide
         RampOptions options,
         int ignoreIndex)
     {
-        IReadOnlyList<RampReport> ramps = Ramp.Ramps(palette, options);
+        // Ramps are detected on the entries actually being compared against. Detecting them on
+        // the full palette and dropping the ignored entry's lightness afterwards is not the
+        // same thing: two members left of a three-member ramp are no longer a progression, and
+        // the ramp's hue and monotonicity would still be answering for an entry excluded by
+        // the caller.
+        Rgb24[] considered = Without(palette, ignoreIndex);
+        IReadOnlyList<RampReport> ramps = Ramp.Ramps(considered, options);
         List<RampPlacement> placements = [];
 
         for (int i = 0; i < ramps.Count; i++)
         {
             RampReport ramp = ramps[i];
-            if (!SharesHue(ramp, lch, options))
+            if (!SharesHue(ramp, lch, options) || ramp.Lightness.Count == 0)
             {
                 continue;
             }
 
-            float[] lightness = Members(ramp, ignoreIndex);
-            if (lightness.Length == 0)
-            {
-                continue;
-            }
-
-            placements.Add(Placement(i, lab.L, lightness, ramp.IsMonotonicLightness));
+            placements.Add(Placement(i, lab.L, [.. ramp.Lightness], ramp.IsMonotonicLightness));
         }
 
         return placements;
+    }
+
+    /// <summary>The palette without one entry, or unchanged when there is nothing to leave out.</summary>
+    private static Rgb24[] Without(ReadOnlySpan<Rgb24> palette, int ignoreIndex)
+    {
+        if (ignoreIndex < 0 || ignoreIndex >= palette.Length)
+        {
+            return palette.ToArray();
+        }
+
+        Rgb24[] kept = new Rgb24[palette.Length - 1];
+        for (int i = 0, j = 0; i < palette.Length; i++)
+        {
+            if (i != ignoreIndex)
+            {
+                kept[j++] = palette[i];
+            }
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -161,21 +181,6 @@ public static class Collide
             : lch.C >= options.NeutralChroma
                 && ramp.HueDegrees is float hue
                 && MathF.Abs(Oklab.HueDelta(hue, lch.H)) <= options.HueToleranceDegrees;
-
-    /// <summary>The ramp's lightness values, dropping the entry the caller asked to ignore.</summary>
-    private static float[] Members(RampReport ramp, int ignoreIndex)
-    {
-        List<float> lightness = [];
-        for (int i = 0; i < ramp.Indices.Count; i++)
-        {
-            if (ramp.Indices[i] != ignoreIndex)
-            {
-                lightness.Add(ramp.Lightness[i]);
-            }
-        }
-
-        return [.. lightness];
-    }
 
     private static RampPlacement Placement(int rampIndex, float candidate, float[] lightness, bool monotonic)
     {

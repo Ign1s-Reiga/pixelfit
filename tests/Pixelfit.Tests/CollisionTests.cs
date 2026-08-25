@@ -163,6 +163,33 @@ public sealed class CollisionTests
         Assert.True(Ramp.Ramps(palette)[placement.RampIndex].IsNeutral);
     }
 
+    /// <summary>
+    /// The exclusion has to reach ramp detection, not just the lightness list afterwards. Two
+    /// members left of a three-member ramp are below the minimum and are no longer a ramp.
+    /// </summary>
+    [Fact]
+    public void AnIgnoredEntryCannotLeaveARampBelowTheMinimumBehind()
+    {
+        Rgb24[] threeStep = [At(0.30f, 0.07f, 45f), At(0.50f, 0.07f, 45f), At(0.70f, 0.07f, 45f)];
+
+        CollisionReport report = Collide.Check(threeStep[1], threeStep, ignoreIndex: 1);
+
+        Assert.Empty(report.Placements);
+    }
+
+    /// <summary>
+    /// And where the ramp does survive, it must describe itself without the ignored entry:
+    /// four members less one is a three-member ramp, not a four-member one.
+    /// </summary>
+    [Fact]
+    public void ASurvivingRampReportsItsSizeWithoutTheIgnoredEntry()
+    {
+        CollisionReport report = Collide.Check(WarmRamp[0], WarmRamp, ignoreIndex: 0);
+
+        RampPlacement placement = Assert.Single(report.Placements);
+        Assert.Equal(WarmRamp.Length - 1, placement.MemberCount);
+    }
+
     [Fact]
     public void ThresholdsComeFromRampOptionsSoOneSetOfNumbersGovernsBoth()
     {

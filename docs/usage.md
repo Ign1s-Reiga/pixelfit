@@ -396,7 +396,22 @@ lands mid-ramp is not wrong, it is simply not an extension of that ramp, and
 what to do about that is your call.
 
 The same measurement is in PaletteLens — select a swatch and the detail panel
-reports what that entry collides with, excluding itself.
+reports what that entry collides with, excluding itself:
+
+```
+[14] #566C86   rgb(86, 108, 134)
+L 0.512   C 0.038   h 253°
+nearest [1] at dE 0.089 — greyscale with [2], [9]
+ramp 1: 5 of 8 by lightness, does not extend it
+```
+
+Collisions are listed by kind, so a colour that is too close to one entry and a
+greyscale collision with another says which is which rather than naming both
+problems against both entries.
+
+Excluding the entry itself reaches ramp detection too, not just the lightness
+list: leaving one member out of a three-member ramp leaves two, and two entries
+are not a progression, so no placement is reported for it.
 
 ### `unused` never appears in the CLI
 
