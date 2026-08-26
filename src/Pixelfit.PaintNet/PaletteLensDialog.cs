@@ -198,15 +198,15 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         detailLabel.AutoSize = false;
         detailLabel.Dock = DockStyle.Fill;
 
-        // Three lines now: identity, OKLCh, and what the entry collides with.
-        detailLabel.Height = 58;
+        // Up to four lines: identity, OKLCh, collisions, and ramp placement.
+        detailLabel.Height = 76;
         pane.Controls.Add(detailLabel, 0, 2);
 
         // Two lines for the colour you are holding, kept visually apart from the selected
         // swatch's detail because it is a different question about a different colour.
         primaryLabel.AutoSize = false;
         primaryLabel.Dock = DockStyle.Fill;
-        primaryLabel.Height = 44;
+        primaryLabel.Height = 62;
         primaryLabel.Margin = new Padding(3, 6, 3, 0);
         pane.Controls.Add(primaryLabel, 0, 3);
 
@@ -521,18 +521,52 @@ public sealed class PaletteLensDialog : EffectConfigForm<PaletteLensEffect, Pale
         }
 
         string nearest = $"nearest [{report.NearestIndex}] at dE {report.NearestDistance:F3}";
+        string collisions = DescribeCollisions(report);
+        string placements = DescribePlacements(report);
+
+        return placements.Length == 0
+            ? $"{nearest} — {collisions}"
+            : $"{nearest} — {collisions}\n{placements}";
+    }
+
+    /// <summary>
+    /// Collisions grouped by kind, so it is clear which problem belongs to which entry.
+    /// </summary>
+    /// <remarks>
+    /// Naming the kinds together and then listing every index — "too close / greyscale with
+    /// [1], [2]" — reads as though both apply to both, which is the one thing the report is
+    /// meant to be precise about.
+    /// </remarks>
+    private static string DescribeCollisions(CollisionReport report)
+    {
         if (report.Collisions.Count == 0)
         {
-            return $"{nearest} — no collisions";
+            return "no collisions";
         }
 
-        string with = string.Join(", ", report.Collisions.Select(c => $"[{c.Index}]"));
-        string kinds = report.Collisions.Any(c => c.Kind == PaletteWarningKind.TooClose)
-            ? report.Collisions.Any(c => c.Kind == PaletteWarningKind.GreyscaleCollision)
-                ? "too close / greyscale"
-                : "too close"
-            : "greyscale";
-
-        return $"{nearest} — {kinds} with {with}";
+        List<string> parts = [];
+        AddKind(parts, report, PaletteWarningKind.TooClose, "too close with");
+        AddKind(parts, report, PaletteWarningKind.GreyscaleCollision, "greyscale with");
+        return string.Join("; ", parts);
     }
+
+    private static void AddKind(List<string> parts, CollisionReport report, PaletteWarningKind kind, string label)
+    {
+        string indices = string.Join(", ", report.Collisions.Where(c => c.Kind == kind).Select(c => $"[{c.Index}]"));
+        if (indices.Length > 0)
+        {
+            parts.Add($"{label} {indices}");
+        }
+    }
+
+    /// <summary>
+    /// Where the colour would fall in any ramp sharing its hue. Core computes this either way;
+    /// leaving it unrendered dropped one of the measurements the report exists to make.
+    /// </summary>
+    private static string DescribePlacements(CollisionReport report) =>
+        string.Join(
+            " · ",
+            report.Placements.Select(p =>
+                $"ramp {p.RampIndex + 1}: {p.PositionByLightness + 1} of {p.MemberCount + 1} by lightness, "
+                + (p.ExtendsProgression ? "extends it" : "does not extend it")));
 }

@@ -10,7 +10,10 @@ public sealed record Collision(int Index, Rgb24 Color, PaletteWarningKind Kind, 
 /// <summary>
 /// Where a candidate would sit in a ramp it shares a hue with.
 /// </summary>
-/// <param name="RampIndex">Index into the ramp list this placement refers to.</param>
+/// <param name="RampIndex">
+/// Which of the ramps of the palette <em>as passed in</em> this refers to, including any entry
+/// the caller asked to ignore. That is the list a caller can number, and the one a UI shows.
+/// </param>
 /// <param name="PositionByLightness">
 /// How many of the ramp's entries are darker than the candidate, so 0 means it would be the
 /// darkest and Count means the lightest.
@@ -128,27 +131,82 @@ public static class Collide
         RampOptions options,
         int ignoreIndex)
     {
-        IReadOnlyList<RampReport> ramps = Ramp.Ramps(palette, options);
+        // Ramps are detected on the entries actually being compared against. Detecting them on
+        // the full palette and dropping the ignored entry's lightness afterwards is not the
+        // same thing: two members left of a three-member ramp are no longer a progression, and
+        // the ramp's hue and monotonicity would still be answering for an entry excluded by
+        // the caller.
+        Rgb24[] considered = Without(palette, ignoreIndex);
+        IReadOnlyList<RampReport> ramps = Ramp.Ramps(considered, options);
+
+        // The measurements come from the reduced set; the index does not. A caller numbering
+        // ramps has the palette it passed in, so that is what RampIndex has to be read
+        // against — and excluding an entry can drop an earlier ramp below the minimum, which
+        // would otherwise shift every number after it and name the wrong ramp.
+        IReadOnlyList<RampReport> numbered = ignoreIndex < 0 ? ramps : Ramp.Ramps(palette, options);
         List<RampPlacement> placements = [];
 
         for (int i = 0; i < ramps.Count; i++)
         {
             RampReport ramp = ramps[i];
-            if (!SharesHue(ramp, lch, options))
+            if (!SharesHue(ramp, lch, options) || ramp.Lightness.Count == 0)
             {
                 continue;
             }
 
-            float[] lightness = Members(ramp, ignoreIndex);
-            if (lightness.Length == 0)
-            {
-                continue;
-            }
-
-            placements.Add(Placement(i, lab.L, lightness, ramp.IsMonotonicLightness));
+            placements.Add(Placement(
+                NumberOf(ramp, numbered, ignoreIndex, i),
+                lab.L,
+                [.. ramp.Lightness],
+                ramp.IsMonotonicLightness));
         }
 
         return placements;
+    }
+
+    /// <summary>
+    /// Which of the full palette's ramps this one is, found by taking a member back to the
+    /// index it had before the exclusion shifted everything after it down.
+    /// </summary>
+    private static int NumberOf(RampReport ramp, IReadOnlyList<RampReport> numbered, int ignoreIndex, int fallback)
+    {
+        if (ignoreIndex < 0 || ramp.Indices.Count == 0)
+        {
+            return fallback;
+        }
+
+        int member = ramp.Indices[0];
+        int original = member < ignoreIndex ? member : member + 1;
+
+        for (int i = 0; i < numbered.Count; i++)
+        {
+            if (numbered[i].Indices.Contains(original))
+            {
+                return i;
+            }
+        }
+
+        return fallback;
+    }
+
+    /// <summary>The palette without one entry, or unchanged when there is nothing to leave out.</summary>
+    private static Rgb24[] Without(ReadOnlySpan<Rgb24> palette, int ignoreIndex)
+    {
+        if (ignoreIndex < 0 || ignoreIndex >= palette.Length)
+        {
+            return palette.ToArray();
+        }
+
+        Rgb24[] kept = new Rgb24[palette.Length - 1];
+        for (int i = 0, j = 0; i < palette.Length; i++)
+        {
+            if (i != ignoreIndex)
+            {
+                kept[j++] = palette[i];
+            }
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -161,21 +219,6 @@ public static class Collide
             : lch.C >= options.NeutralChroma
                 && ramp.HueDegrees is float hue
                 && MathF.Abs(Oklab.HueDelta(hue, lch.H)) <= options.HueToleranceDegrees;
-
-    /// <summary>The ramp's lightness values, dropping the entry the caller asked to ignore.</summary>
-    private static float[] Members(RampReport ramp, int ignoreIndex)
-    {
-        List<float> lightness = [];
-        for (int i = 0; i < ramp.Indices.Count; i++)
-        {
-            if (ramp.Indices[i] != ignoreIndex)
-            {
-                lightness.Add(ramp.Lightness[i]);
-            }
-        }
-
-        return [.. lightness];
-    }
 
     private static RampPlacement Placement(int rampIndex, float candidate, float[] lightness, bool monotonic)
     {

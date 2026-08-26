@@ -163,6 +163,60 @@ public sealed class CollisionTests
         Assert.True(Ramp.Ramps(palette)[placement.RampIndex].IsNeutral);
     }
 
+    /// <summary>
+    /// The exclusion has to reach ramp detection, not just the lightness list afterwards. Two
+    /// members left of a three-member ramp are below the minimum and are no longer a ramp.
+    /// </summary>
+    [Fact]
+    public void AnIgnoredEntryCannotLeaveARampBelowTheMinimumBehind()
+    {
+        Rgb24[] threeStep = [At(0.30f, 0.07f, 45f), At(0.50f, 0.07f, 45f), At(0.70f, 0.07f, 45f)];
+
+        CollisionReport report = Collide.Check(threeStep[1], threeStep, ignoreIndex: 1);
+
+        Assert.Empty(report.Placements);
+    }
+
+    /// <summary>
+    /// And where the ramp does survive, it must describe itself without the ignored entry:
+    /// four members less one is a three-member ramp, not a four-member one.
+    /// </summary>
+    [Fact]
+    public void ASurvivingRampReportsItsSizeWithoutTheIgnoredEntry()
+    {
+        CollisionReport report = Collide.Check(WarmRamp[0], WarmRamp, ignoreIndex: 0);
+
+        RampPlacement placement = Assert.Single(report.Placements);
+        Assert.Equal(WarmRamp.Length - 1, placement.MemberCount);
+    }
+
+    /// <summary>
+    /// RampIndex is read against the ramps of the palette as passed in, because that is the
+    /// list a caller has and, in the dialog, the list on screen. Excluding an entry can drop an
+    /// earlier ramp below the minimum, and if the index were read against what survived, a
+    /// placement would name a different ramp than the one it belongs to.
+    /// </summary>
+    [Fact]
+    public void RampIndexStaysReadableAgainstTheFullPalette()
+    {
+        // Ramp 0 is warm and has exactly three members; ramp 1 is cool and has four.
+        Rgb24[] palette =
+        [
+            At(0.30f, 0.07f, 45f), At(0.50f, 0.07f, 45f), At(0.70f, 0.07f, 45f),
+            At(0.25f, 0.09f, 250f), At(0.45f, 0.09f, 250f), At(0.65f, 0.09f, 250f), At(0.85f, 0.09f, 250f),
+        ];
+
+        Assert.Equal(2, Ramp.Ramps(palette).Count);
+
+        // Ignoring a warm entry leaves the warm ramp with two members, so it stops being a
+        // ramp — but the cool ramp is still ramp 1 to anyone looking at the palette.
+        CollisionReport report = Collide.Check(At(0.55f, 0.09f, 250f), palette, ignoreIndex: 0);
+
+        RampPlacement placement = Assert.Single(report.Placements);
+        Assert.Equal(1, placement.RampIndex);
+        Assert.True(Ramp.Ramps(palette)[placement.RampIndex].HueDegrees is > 180f and < 320f);
+    }
+
     [Fact]
     public void ThresholdsComeFromRampOptionsSoOneSetOfNumbersGovernsBoth()
     {
